@@ -2,3 +2,5 @@
 **/public
 pnpm-lock.yaml
 node_modules
+.env
+.envrc
