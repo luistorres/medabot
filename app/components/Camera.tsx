@@ -13,19 +13,29 @@ const Camera = ({ onCapture }: { onCapture: (imageSrc: string) => void }) => {
   };
 
   const videoConstraints = {
-    facingMode: "environment", // "environment" = back camera, "user" = front camera
+    facingMode: "environment",
+    width: { ideal: 1920 },
+    height: { ideal: 1080 },
+    aspectRatio: 16 / 9,
   };
 
   return (
-    <div className="flex flex-col">
-      <Webcam
-        ref={webcamRef}
-        screenshotFormat="image/jpeg"
-        videoConstraints={videoConstraints}
-      />
+    <div className="flex flex-col items-center w-full max-w-2xl mx-auto">
+      <h2 className="text-lg font-semibold mb-4 text-center">
+        Please scan your medicine package
+      </h2>
+      <div className="w-full aspect-video">
+        <Webcam
+          ref={webcamRef}
+          screenshotFormat="image/jpeg"
+          videoConstraints={videoConstraints}
+          className="w-full h-full object-cover rounded-lg"
+          screenshotQuality={0.95}
+        />
+      </div>
       <button
         onClick={capture}
-        className="bg-blue-500 text-white px-4 py-2 rounded-md mt-4"
+        className="bg-blue-500 text-white px-6 py-3 rounded-md mt-4 text-lg font-medium"
       >
         Capture
       </button>
