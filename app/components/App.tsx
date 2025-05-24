@@ -1,5 +1,6 @@
 import { useState } from "react";
 import Camera from "./Camera";
+import Chat from "./Chat";
 import { IdentifyMedicineResponse } from "../core/identify";
 import { performIdentify } from "../server/performIdentify";
 import { fetchRegulatoryPdf } from "../server/fetchRefulatoryPdf";
@@ -16,8 +17,6 @@ function App() {
   });
   const [overview, setOverview] = useState<string>("");
   const [pdfData, setPdfData] = useState<string | null>(null);
-  const [question, setQuestion] = useState<string>("");
-  const [answer, setAnswer] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
 
   // Processing steps state
@@ -101,28 +100,6 @@ function App() {
     }
   };
 
-  const handleAskQuestion = async () => {
-    if (!question || !pdfData) return;
-
-    setLoading(true);
-    try {
-      const result = await queryLeafletPdf({
-        data: {
-          pdfBase64: pdfData,
-          question: question,
-        },
-      });
-
-      if (result.success && typeof result.answer === "string") {
-        setAnswer(result.answer);
-      }
-    } catch (error) {
-      console.error("Error processing question:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleReset = () => {
     setImage(null);
     setMedicineInfo({
@@ -132,8 +109,6 @@ function App() {
       dosage: "",
     });
     setPdfData(null);
-    setQuestion("");
-    setAnswer("");
     setOverview("");
     setCompletedSteps([]);
     setCurrentStep("");
@@ -174,9 +149,10 @@ function App() {
       <div className="max-w-2xl mx-auto space-y-6">
         {!image ? (
           <Camera onCapture={handleCapture} />
-        ) : (
+        ) : !medicineInfo.name ? (
+          // Show image only while processing, hide after medicine is identified
           <div className="flex flex-col">
-            <img src={image} alt="Captured" />
+            <img src={image} alt="Captured" className="rounded-lg" />
             <button
               onClick={handleReset}
               className="bg-blue-500 text-white px-4 py-2 rounded-md mt-4"
@@ -184,33 +160,53 @@ function App() {
               Reset
             </button>
           </div>
+        ) : (
+          // Show only reset button after medicine is identified
+          <div className="flex justify-center">
+            <button
+              onClick={handleReset}
+              className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md text-sm"
+            >
+              Scan New Medicine
+            </button>
+          </div>
         )}
+
         {medicineInfo.name && (
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-2xl font-bold text-gray-800 mb-4">
+          <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
+            <h2 className="text-xl md:text-2xl font-bold text-gray-800 mb-3 md:mb-4">
               {medicineInfo.name}
             </h2>
             <div className="space-y-2">
-              <p className="text-gray-700">
+              <p className="text-sm md:text-base text-gray-700">
                 <span className="font-semibold">Active Substance:</span>{" "}
                 {medicineInfo.activeSubstance}
               </p>
-              <p className="text-gray-700">
+              <p className="text-sm md:text-base text-gray-700">
                 <span className="font-semibold">Brand:</span>{" "}
                 {medicineInfo.brand}
               </p>
-              <p className="text-gray-700">
+              <p className="text-sm md:text-base text-gray-700">
                 <span className="font-semibold">Dosage:</span>{" "}
                 {medicineInfo.dosage}
               </p>
             </div>
+            {pdfData && (
+              <button
+                onClick={downloadPdf}
+                className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded mt-3 md:mt-4 transition-colors text-sm md:text-base"
+              >
+                <span>📄</span>
+                <span>Download Leaflet</span>
+              </button>
+            )}
           </div>
         )}
 
         {/* Processing Steps */}
         {loading && (
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h3 className="text-xl font-bold text-gray-800 mb-4">
+          <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
+            <h3 className="text-lg md:text-xl font-bold text-gray-800 mb-3 md:mb-4">
               Processing Medicine Information
             </h3>
             <div className="space-y-3">
@@ -221,7 +217,7 @@ function App() {
                 return (
                   <div key={step.id} className="flex items-center space-x-3">
                     <div
-                      className={`w-8 h-8 rounded-full flex items-center justify-center text-sm ${
+                      className={`w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center text-xs md:text-sm ${
                         isCompleted
                           ? "bg-green-500 text-white"
                           : isCurrent
@@ -232,7 +228,7 @@ function App() {
                       {isCompleted ? "✓" : isCurrent ? "⟳" : step.icon}
                     </div>
                     <span
-                      className={`${
+                      className={`text-sm md:text-base ${
                         isCompleted
                           ? "text-green-700 font-medium"
                           : isCurrent
@@ -244,7 +240,7 @@ function App() {
                     </span>
                     {isCurrent && (
                       <div className="ml-auto">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                        <div className="animate-spin rounded-full h-3 w-3 md:h-4 md:w-4 border-b-2 border-blue-600"></div>
                       </div>
                     )}
                   </div>
@@ -260,8 +256,12 @@ function App() {
             <div className="flex items-center">
               <div className="text-red-500 mr-2">❌</div>
               <div>
-                <h4 className="text-red-800 font-medium">Processing Error</h4>
-                <p className="text-red-700 text-sm mt-1">{processingError}</p>
+                <h4 className="text-red-800 font-medium text-sm md:text-base">
+                  Processing Error
+                </h4>
+                <p className="text-red-700 text-xs md:text-sm mt-1">
+                  {processingError}
+                </p>
               </div>
             </div>
             <button
@@ -273,76 +273,13 @@ function App() {
           </div>
         )}
 
-        {overview && (
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <div className="flex justify-between items-start mb-3">
-              <h3 className="text-xl font-bold text-gray-800">Overview</h3>
-              {pdfData && (
-                <button
-                  onClick={downloadPdf}
-                  className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm transition-colors"
-                >
-                  <span>📄</span>
-                  <span>View Leaflet</span>
-                </button>
-              )}
-            </div>
-            <p className="text-gray-700 leading-relaxed">{overview}</p>
-          </div>
-        )}
-
-        {completedSteps.includes("ready") && (
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h3 className="text-xl font-bold text-gray-800 mb-3">
-              Ask about this medicine
-            </h3>
-
-            {/* Sample questions */}
-            <div className="mb-4">
-              <p className="text-sm text-gray-600 mb-2">Try asking:</p>
-              <div className="flex flex-wrap gap-2">
-                {[
-                  "What are the side effects?",
-                  "How should I take this medicine?",
-                  "What are the contraindications?",
-                  "What should I do if I miss a dose?",
-                ].map((sampleQ) => (
-                  <button
-                    key={sampleQ}
-                    onClick={() => setQuestion(sampleQ)}
-                    className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded"
-                  >
-                    {sampleQ}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex space-x-2 mb-4">
-              <input
-                type="text"
-                value={question}
-                onChange={(e) => setQuestion(e.target.value)}
-                placeholder="Type your question here..."
-                className="flex-grow p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                onKeyPress={(e) => e.key === "Enter" && handleAskQuestion()}
-              />
-              <button
-                onClick={handleAskQuestion}
-                disabled={loading || !question}
-                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:bg-gray-400"
-              >
-                {loading ? "Processing..." : "Ask"}
-              </button>
-            </div>
-
-            {answer && (
-              <div className="mt-4 p-4 bg-gray-50 rounded">
-                <h4 className="font-semibold text-gray-800 mb-2">Answer:</h4>
-                <p className="text-gray-800 whitespace-pre-wrap">{answer}</p>
-              </div>
-            )}
-          </div>
+        {/* Chat Component */}
+        {completedSteps.includes("ready") && pdfData && (
+          <Chat
+            pdfData={pdfData}
+            medicineName={medicineInfo.name}
+            initialOverview={overview}
+          />
         )}
       </div>
     </div>
