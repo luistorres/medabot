@@ -2,8 +2,6 @@
 
 An AI-powered medicine identification and information system that uses computer vision and retrieval-augmented generation (RAG) to provide accurate, source-backed answers about medications from their official patient leaflets.
 
-## 🎯 Project Goal
-
 MedaBot solves the problem of quickly accessing reliable medication information by:
 
 1. **Identifying medicines** from photos of packaging/pills
