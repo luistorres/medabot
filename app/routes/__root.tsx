@@ -5,7 +5,9 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import "../index.css";
+
+import styles from "../index.css?url";
+
 export const Route = createRootRoute({
   head: () => ({
     meta: [
@@ -20,6 +22,7 @@ export const Route = createRootRoute({
         title: "Medabot smart agent",
       },
     ],
+    links: [{ rel: "stylesheet", href: styles }],
   }),
   component: RootComponent,
 });

@@ -38,8 +38,8 @@ export async function regulatoryPDF(
       ) {
         console.log("PDF response intercepted!", request.url());
         const pdfBuffer = Buffer.from(await response.body());
-        await fs.promises.writeFile("./debug-rcm.pdf", pdfBuffer);
-        console.log("PDF saved to ./debug-rcm.pdf");
+        // await fs.promises.writeFile("./debug-rcm.pdf", pdfBuffer);
+        // console.log("PDF saved to ./debug-rcm.pdf");
 
         // Resolve the promise with the PDF buffer
         resolvePdfPromise(pdfBuffer);
