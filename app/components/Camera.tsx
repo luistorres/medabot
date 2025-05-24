@@ -13,9 +13,14 @@ const Camera = ({ onCapture }: { onCapture: (imageSrc: string) => void }) => {
   };
 
   return (
-    <div>
+    <div className="flex flex-col">
       <Webcam ref={webcamRef} screenshotFormat="image/jpeg" />
-      <button onClick={capture}>Capture</button>
+      <button
+        onClick={capture}
+        className="bg-blue-500 text-white px-4 py-2 rounded-md mt-4"
+      >
+        Capture
+      </button>
     </div>
   );
 };
