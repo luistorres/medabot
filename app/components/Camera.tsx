@@ -12,9 +12,17 @@ const Camera = ({ onCapture }: { onCapture: (imageSrc: string) => void }) => {
     }
   };
 
+  const videoConstraints = {
+    facingMode: "environment", // "environment" = back camera, "user" = front camera
+  };
+
   return (
     <div className="flex flex-col">
-      <Webcam ref={webcamRef} screenshotFormat="image/jpeg" />
+      <Webcam
+        ref={webcamRef}
+        screenshotFormat="image/jpeg"
+        videoConstraints={videoConstraints}
+      />
       <button
         onClick={capture}
         className="bg-blue-500 text-white px-4 py-2 rounded-md mt-4"
