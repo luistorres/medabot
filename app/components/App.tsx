@@ -25,11 +25,15 @@ function App() {
   const [processingError, setProcessingError] = useState<string>("");
 
   const steps = [
-    { id: "identify", label: "Identifying medicine from image", icon: "🔍" },
-    { id: "fetch", label: "Fetching patient leaflet", icon: "📄" },
-    { id: "process", label: "Processing leaflet with AI", icon: "🤖" },
-    { id: "overview", label: "Generating overview", icon: "📝" },
-    { id: "ready", label: "Ready for questions", icon: "✅" },
+    {
+      id: "identify",
+      label: "A identificar medicamento da imagem",
+      icon: "🔍",
+    },
+    { id: "fetch", label: "A obter folheto informativo", icon: "📄" },
+    { id: "process", label: "A processar folheto com IA", icon: "🤖" },
+    { id: "overview", label: "A gerar resumo", icon: "📝" },
+    { id: "ready", label: "Pronto para questões", icon: "✅" },
   ];
 
   const markStepComplete = (stepId: string) => {
@@ -56,7 +60,7 @@ function App() {
       const pdfResponse = await fetchRegulatoryPdf({ data: medicineInfo });
 
       if (!pdfResponse || !pdfResponse.data) {
-        throw new Error("Failed to fetch patient leaflet");
+        throw new Error("Falha ao obter folheto informativo do medicamento");
       }
 
       setPdfData(pdfResponse.data);
@@ -69,7 +73,7 @@ function App() {
       });
 
       if (!processResult.success) {
-        throw new Error(processResult.error || "Failed to process leaflet");
+        throw new Error(processResult.error || "Falha ao processar folheto");
       }
       markStepComplete("process");
 
@@ -92,7 +96,7 @@ function App() {
     } catch (error) {
       console.error("Error processing image:", error);
       setProcessingError(
-        error instanceof Error ? error.message : "An unknown error occurred"
+        error instanceof Error ? error.message : "Ocorreu um erro desconhecido"
       );
       setCurrentStep("");
     } finally {
@@ -152,12 +156,12 @@ function App() {
         ) : !medicineInfo.name ? (
           // Show image only while processing, hide after medicine is identified
           <div className="flex flex-col">
-            <img src={image} alt="Captured" className="rounded-lg" />
+            <img src={image} alt="Capturada" className="rounded-lg" />
             <button
               onClick={handleReset}
               className="bg-blue-500 text-white px-4 py-2 rounded-md mt-4"
             >
-              Reset
+              Reiniciar
             </button>
           </div>
         ) : (
@@ -167,7 +171,7 @@ function App() {
               onClick={handleReset}
               className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md text-sm"
             >
-              Scan New Medicine
+              Digitalizar Novo Medicamento
             </button>
           </div>
         )}
@@ -179,7 +183,7 @@ function App() {
             </h2>
             <div className="space-y-2">
               <p className="text-sm md:text-base text-gray-700">
-                <span className="font-semibold">Active Substance:</span>{" "}
+                <span className="font-semibold">Substância Activa:</span>{" "}
                 {medicineInfo.activeSubstance}
               </p>
               <p className="text-sm md:text-base text-gray-700">
@@ -197,7 +201,7 @@ function App() {
                 className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded mt-3 md:mt-4 transition-colors text-sm md:text-base"
               >
                 <span>📄</span>
-                <span>Download Leaflet</span>
+                <span>Transferir Folheto</span>
               </button>
             )}
           </div>
@@ -207,7 +211,7 @@ function App() {
         {loading && (
           <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
             <h3 className="text-lg md:text-xl font-bold text-gray-800 mb-3 md:mb-4">
-              Processing Medicine Information
+              A Processar Informações do Medicamento
             </h3>
             <div className="space-y-3">
               {steps.map((step) => {
@@ -257,7 +261,7 @@ function App() {
               <div className="text-red-500 mr-2">❌</div>
               <div>
                 <h4 className="text-red-800 font-medium text-sm md:text-base">
-                  Processing Error
+                  Erro de Processamento
                 </h4>
                 <p className="text-red-700 text-xs md:text-sm mt-1">
                   {processingError}
@@ -268,7 +272,7 @@ function App() {
               onClick={handleReset}
               className="mt-3 bg-red-600 text-white px-4 py-2 rounded text-sm hover:bg-red-700"
             >
-              Try Again
+              Tentar Novamente
             </button>
           </div>
         )}

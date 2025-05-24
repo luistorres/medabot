@@ -76,7 +76,7 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
         id: (Date.now() + 1).toString(),
         type: "assistant",
         content:
-          "Sorry, I encountered an error processing your question. Please try again.",
+          "Desculpe, encontrei um erro ao processar a sua questão. Tente novamente.",
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);
@@ -86,10 +86,10 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
   };
 
   const sampleQuestions = [
-    "What are the side effects?",
-    "How should I take this medicine?",
-    "What are the contraindications?",
-    "What should I do if I miss a dose?",
+    "Quais são os efeitos secundários?",
+    "Como devo tomar este medicamento?",
+    "Quais são as contraindicações?",
+    "O que devo fazer se me esquecer de uma dose?",
   ];
 
   return (
@@ -97,7 +97,7 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
       {/* Header */}
       <div className="p-3 md:p-4 border-b border-gray-200">
         <h3 className="text-lg md:text-xl font-bold text-gray-800">
-          Ask about {medicineName}
+          Questões sobre {medicineName}
         </h3>
       </div>
 
@@ -137,7 +137,7 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
             <div className="bg-gray-100 text-gray-800 p-2 md:p-3 rounded-lg">
               <div className="flex items-center space-x-2">
                 <div className="animate-spin rounded-full h-3 w-3 md:h-4 md:w-4 border-b-2 border-gray-600"></div>
-                <span className="text-sm md:text-base">Thinking...</span>
+                <span className="text-sm md:text-base">A pensar...</span>
               </div>
             </div>
           </div>
@@ -149,7 +149,9 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
       {/* Sample questions (only show if no messages yet) */}
       {messages.length <= 1 && (
         <div className="p-3 md:p-4 border-t border-gray-200">
-          <p className="text-xs md:text-sm text-gray-600 mb-2">Try asking:</p>
+          <p className="text-xs md:text-sm text-gray-600 mb-2">
+            Experimente perguntar:
+          </p>
           <div className="flex flex-wrap gap-1 md:gap-2">
             {sampleQuestions.map((sampleQ) => (
               <button
@@ -171,7 +173,7 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
             type="text"
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
-            placeholder="Type your question here..."
+            placeholder="Escreva a sua questão aqui..."
             className="flex-grow p-2 text-sm md:text-base border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
             onKeyPress={(e) => e.key === "Enter" && handleAskQuestion()}
             disabled={loading}
@@ -181,7 +183,7 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
             disabled={loading || !question.trim()}
             className="bg-blue-600 text-white px-3 md:px-4 py-2 text-sm md:text-base rounded hover:bg-blue-700 disabled:bg-gray-400"
           >
-            Send
+            Enviar
           </button>
         </div>
       </div>

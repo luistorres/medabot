@@ -22,7 +22,7 @@ const Camera = ({ onCapture }: { onCapture: (imageSrc: string) => void }) => {
   return (
     <div className="flex flex-col items-center w-full max-w-2xl mx-auto">
       <h2 className="text-lg font-semibold mb-4 text-center">
-        Please scan your medicine package
+        Por favor, digitalize a embalagem do seu medicamento
       </h2>
       <div className="w-full aspect-video">
         <Webcam
@@ -37,7 +37,7 @@ const Camera = ({ onCapture }: { onCapture: (imageSrc: string) => void }) => {
         onClick={capture}
         className="bg-blue-500 text-white px-6 py-3 rounded-md mt-4 text-lg font-medium"
       >
-        Capture
+        Capturar
       </button>
     </div>
   );

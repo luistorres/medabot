@@ -77,7 +77,7 @@ Instructions:
 - Do not make up or infer information not explicitly stated in the leaflet
 - Be precise and cite specific sections when possible
 - Always recommend consulting healthcare professionals for personalized medical advice
-- Always reply in the language of the question.
+- Always reply in portuguese.
 
 Answer:
     `);
