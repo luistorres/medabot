@@ -13,10 +13,14 @@
     "start": "vinxi start"
   },
   "dependencies": {
+    "@langchain/community": "^0.3.44",
+    "@langchain/openai": "^0.5.11",
     "@tailwindcss/vite": "^4.0.14",
     "@tanstack/react-router": "^1.114.17",
     "@tanstack/react-start": "^1.114.19",
+    "langchain": "^0.3.27",
     "openai": "^4.87.3",
+    "pdf-parse": "^1.1.1",
     "playwright": "^1.51.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
