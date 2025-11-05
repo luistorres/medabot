@@ -1,18 +1,47 @@
 import { useState, useEffect } from "react";
-import { Document, Page, pdfjs } from "react-pdf";
 import { usePDF } from "../context/PDFContext";
 import { useMediaQuery } from "../hooks/useMediaQuery";
-
-// Configure PDF.js worker
-// Using local worker file instead of CDN for better performance and reliability
-// The worker is copied to /public during build via scripts/copy-pdf-worker.js
-pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
 interface PDFViewerProps {
   onClose?: () => void;
 }
 
 const PDFViewer = ({ onClose }: PDFViewerProps) => {
+  // Don't render on server - PDF.js needs browser APIs
+  const [isClient, setIsClient] = useState(false);
+  const [pdfComponents, setPdfComponents] = useState<any>(null);
+
+  // Dynamically import react-pdf only on the client side
+  useEffect(() => {
+    let mounted = true;
+
+    const loadPdfComponents = async () => {
+      try {
+        const reactPdf = await import("react-pdf");
+
+        // Configure PDF.js worker
+        // Using local worker file instead of CDN for better performance and reliability
+        reactPdf.pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+
+        if (mounted) {
+          setPdfComponents({
+            Document: reactPdf.Document,
+            Page: reactPdf.Page,
+          });
+          setIsClient(true);
+        }
+      } catch (error) {
+        console.error("Failed to load PDF components:", error);
+      }
+    };
+
+    loadPdfComponents();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const {
     pdfData,
     currentPage,
@@ -67,9 +96,12 @@ const PDFViewer = ({ onClose }: PDFViewerProps) => {
     setScale(zoomLevels[nextIndex]);
   };
 
-  if (!pdfDataUrl || !isPdfViewerOpen) {
+  // Don't render until we're on the client and PDF components are loaded (SSR safety)
+  if (!isClient || !pdfComponents || !pdfDataUrl || !isPdfViewerOpen) {
     return null;
   }
+
+  const { Document, Page } = pdfComponents;
 
   // Mobile: Full-screen modal
   if (!isDesktop) {
