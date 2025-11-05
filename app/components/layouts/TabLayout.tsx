@@ -48,14 +48,27 @@ const TabLayout = ({
         </div>
       </div>
 
-      {/* Tab Content */}
-      <div className="flex-1 min-h-0 overflow-hidden">
-        {activeTab === "chat" && <div className="h-full">{chat}</div>}
-        {activeTab === "medicine" && (
-          <div className="h-full overflow-y-auto">{medicineInfoPanel}</div>
-        )}
-        {activeTab === "pdf" && showPdfViewer && (
-          <div className="h-full">
+      {/* Tab Content - Keep all mounted to preserve state */}
+      <div className="flex-1 min-h-0 overflow-hidden relative">
+        {/* Chat Tab */}
+        <div
+          className={`h-full ${activeTab === "chat" ? "block" : "hidden"}`}
+        >
+          {chat}
+        </div>
+
+        {/* Medicine Info Tab */}
+        <div
+          className={`h-full overflow-y-auto ${activeTab === "medicine" ? "block" : "hidden"}`}
+        >
+          {medicineInfoPanel}
+        </div>
+
+        {/* PDF Viewer Tab */}
+        {showPdfViewer && (
+          <div
+            className={`h-full ${activeTab === "pdf" ? "block" : "hidden"}`}
+          >
             <PDFViewer isTabMode={true} />
           </div>
         )}
