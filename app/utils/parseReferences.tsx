@@ -23,8 +23,9 @@ export function parseMessageWithReferences(
 
   // More comprehensive regex pattern to match various page reference formats
   // Matches: "página 3", "page 3", "p. 3", "pág. 3", "secção 3", etc.
+  // Also matches: "na página", "da página", "para a página", etc.
   const pageReferencePattern =
-    /(\(?\s*(?:ver|consulte|consultar|veja|check|see)?\s*(?:a\s+)?(?:página|pagina|páginas|paginas|page|pages|pág\.|pag\.|p\.|secção|seção|seccion|section|folha)\s*(\d+)(?:\s*[-–—]\s*(\d+))?\s*\)?)/gi;
+    /(\(?\s*(?:ver|consulte|consultar|veja|check|see)?\s*(?:(?:na|da|pela|pelo|para\s+a|com\s+a|de\s+a|em\s+a)\s+|(?:a\s+)?)(?:página|pagina|páginas|paginas|page|pages|pág\.|pag\.|p\.|secção|seção|seccion|section|folha)\s*(\d+)(?:\s*[-–—]\s*(\d+))?\s*\)?)/gi;
 
   const parts: ReactNode[] = [];
   let lastIndex = 0;
