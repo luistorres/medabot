@@ -13,5 +13,7 @@ export default defineConfig({
       }),
       tailwindcss(),
     ],
+    // Ensure public directory is properly configured
+    publicDir: "public",
   },
 });
