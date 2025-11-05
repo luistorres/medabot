@@ -77,14 +77,7 @@ const LandingPage = ({ onScanMedicine, onManualEntry }: LandingPageProps) => {
                 <span className="text-green-600 mr-2 mt-0.5">✓</span>
                 <span>
                   <strong>Informação oficial:</strong> Apenas dados do folheto
-                  informativo regulamentar
-                </span>
-              </li>
-              <li className="flex items-start">
-                <span className="text-green-600 mr-2 mt-0.5">✓</span>
-                <span>
-                  <strong>Citações de página:</strong> Referências diretas às
-                  secções do folheto
+                  informativo (bula) regulamentar
                 </span>
               </li>
               <li className="flex items-start">
@@ -92,13 +85,6 @@ const LandingPage = ({ onScanMedicine, onManualEntry }: LandingPageProps) => {
                 <span>
                   <strong>Visualização do PDF:</strong> Consulte o folheto
                   completo em paralelo
-                </span>
-              </li>
-              <li className="flex items-start">
-                <span className="text-green-600 mr-2 mt-0.5">✓</span>
-                <span>
-                  <strong>Respostas instantâneas:</strong> IA processa e
-                  responde em segundos
                 </span>
               </li>
             </ul>
