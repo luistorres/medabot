@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { IdentifyMedicineResponse } from "../core/identify";
 import { usePDF } from "../context/PDFContext";
 import { useMediaQuery } from "../hooks/useMediaQuery";
@@ -20,66 +19,21 @@ const MedicineInfoPanel = ({
 }: MedicineInfoPanelProps) => {
   const { setIsPdfViewerOpen } = usePDF();
   const isMobile = useMediaQuery("(max-width: 48rem)");
-  const [isCollapsed, setIsCollapsed] = useState(false);
 
   const handleViewPdf = () => {
     setIsPdfViewerOpen(true);
   };
 
-  // On desktop, always show expanded
-  const shouldShowCollapsed = isMobile && isCollapsed;
-
   return (
     <div className="bg-white h-full flex flex-col">
-      {/* Mobile: Collapsible header */}
-      {isMobile && (
-        <button
-          onClick={() => setIsCollapsed(!isCollapsed)}
-          className="w-full p-4 border-b border-gray-200 flex items-center justify-between hover:bg-gray-50 transition-colors"
-        >
-          <div className="flex items-center space-x-3">
-            <span className="text-2xl">💊</span>
-            <div className="text-left">
-              <h3 className="font-semibold text-gray-800">
-                {medicineInfo.name}
-              </h3>
-              <p className="text-xs text-gray-600">{medicineInfo.dosage}</p>
-            </div>
-          </div>
-          <svg
-            className={`w-5 h-5 text-gray-600 transition-transform ${
-              isCollapsed ? "" : "rotate-180"
-            }`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M19 9l-7 7-7-7"
-            />
-          </svg>
-        </button>
-      )}
+      {/* Header */}
+      <div className="flex items-center space-x-2 p-4 pb-4 border-b border-gray-200">
+        <span className="text-2xl">💊</span>
+        <h2 className="text-lg font-bold text-gray-800">Medicamento</h2>
+      </div>
 
       {/* Content */}
-      <div
-        className={`${
-          shouldShowCollapsed ? "hidden" : "flex"
-        } flex-col p-4 space-y-4 overflow-y-auto ${
-          isMobile ? "" : "h-full"
-        }`}
-      >
-        {/* Desktop: Header */}
-        {!isMobile && (
-          <div className="flex items-center space-x-2 pb-4 border-b border-gray-200">
-            <span className="text-2xl">💊</span>
-            <h2 className="text-lg font-bold text-gray-800">Medicamento</h2>
-          </div>
-        )}
-
+      <div className="flex flex-col p-4 space-y-4 overflow-y-auto h-full">
         {/* Medicine Image Thumbnail */}
         {image && !isMobile && (
           <div className="flex justify-center">

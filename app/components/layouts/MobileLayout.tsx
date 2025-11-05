@@ -1,12 +1,17 @@
 import { ReactNode } from "react";
-import PDFViewer from "../PDFViewer";
+import TabLayout from "./TabLayout";
 
 interface MobileLayoutProps {
   medicineInfoPanel: ReactNode;
   chat: ReactNode;
+  showPdfViewer: boolean;
 }
 
-const MobileLayout = ({ medicineInfoPanel, chat }: MobileLayoutProps) => {
+const MobileLayout = ({
+  medicineInfoPanel,
+  chat,
+  showPdfViewer,
+}: MobileLayoutProps) => {
   return (
     <div className="h-screen w-full flex flex-col overflow-hidden bg-gray-50">
       {/* Header */}
@@ -17,16 +22,14 @@ const MobileLayout = ({ medicineInfoPanel, chat }: MobileLayoutProps) => {
         </div>
       </header>
 
-      {/* Medicine Info Panel - Collapsible */}
-      <section className="flex-shrink-0 bg-white border-b border-gray-200">
-        {medicineInfoPanel}
-      </section>
-
-      {/* Chat - Takes remaining space */}
-      <main className="flex-1 min-h-0 overflow-hidden">{chat}</main>
-
-      {/* PDF Viewer Modal - Rendered as overlay when open */}
-      <PDFViewer />
+      {/* Tab-based content */}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <TabLayout
+          medicineInfoPanel={medicineInfoPanel}
+          chat={chat}
+          showPdfViewer={showPdfViewer}
+        />
+      </div>
     </div>
   );
 };
