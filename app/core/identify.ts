@@ -21,7 +21,7 @@ export const identifyMedicine = async (
       {
         role: "system",
         content: `You are a pharmaceutical expert analyzing medicine packaging images. Extract medicine details from the image.
-Return only a JSON object in this format, with no additional text:
+Return only a JSON object in this format, with no additional text and make sure to keep the portuguese names:
 {
   "name": "standardized medicine name",
   "brand": "manufacturer/brand name",
