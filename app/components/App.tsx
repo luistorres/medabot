@@ -1,7 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Camera from "./Camera";
 import Chat from "./Chat";
 import MedicineInfoPanel from "./MedicineInfoPanel";
+import LandingPage from "./LandingPage";
+import ManualMedicineForm from "./ManualMedicineForm";
 import ResponsiveContainer from "./layouts/ResponsiveContainer";
 import { IdentifyMedicineResponse } from "../core/identify";
 import { performIdentify } from "../server/performIdentify";
@@ -10,7 +12,10 @@ import { processLeafletPdf } from "../server/processLeaflet";
 import { queryLeafletPdf } from "../server/queryLeaflet";
 import { PDFProvider, usePDF } from "../context/PDFContext";
 
+type AppScreen = "landing" | "camera" | "manualForm" | "processing" | "results";
+
 function AppContent() {
+  const [currentScreen, setCurrentScreen] = useState<AppScreen>("landing");
   const [image, setImage] = useState<string | null>(null);
   const [medicineInfo, setMedicineInfo] = useState<IdentifyMedicineResponse>({
     name: "",
@@ -32,7 +37,7 @@ function AppContent() {
   const steps = [
     {
       id: "identify",
-      label: "A identificar medicamento da imagem",
+      label: "A identificar medicamento",
       icon: "🔍",
     },
     { id: "fetch", label: "A obter folheto informativo", icon: "📄" },
@@ -46,23 +51,24 @@ function AppContent() {
     setCurrentStep("");
   };
 
-  const handleCapture = async (imgSrc: string) => {
-    setImage(imgSrc);
+  // Process medicine info (called by both camera and manual entry)
+  const processMedicineInfo = async (info: IdentifyMedicineResponse) => {
+    setMedicineInfo(info);
+    setCurrentScreen("processing");
     setLoading(true);
     setProcessingError("");
     setCompletedSteps([]);
     setCurrentStep("");
 
     try {
-      // Step 1: Identify medicine from image
-      setCurrentStep("identify");
-      const medicineInfo = await performIdentify({ data: imgSrc });
-      setMedicineInfo(medicineInfo);
-      markStepComplete("identify");
+      // Skip identify step if coming from manual form
+      if (currentScreen !== "camera") {
+        markStepComplete("identify");
+      }
 
       // Step 2: Fetch PDF
       setCurrentStep("fetch");
-      const pdfResponse = await fetchRegulatoryPdf({ data: medicineInfo });
+      const pdfResponse = await fetchRegulatoryPdf({ data: info });
 
       if (!pdfResponse || !pdfResponse.data) {
         throw new Error("Falha ao obter folheto informativo do medicamento");
@@ -98,8 +104,9 @@ function AppContent() {
 
       // Step 5: Ready for questions
       markStepComplete("ready");
+      setCurrentScreen("results");
     } catch (error) {
-      console.error("Error processing image:", error);
+      console.error("Error processing medicine:", error);
       setProcessingError(
         error instanceof Error ? error.message : "Ocorreu um erro desconhecido"
       );
@@ -109,7 +116,42 @@ function AppContent() {
     }
   };
 
+  // Handle camera capture
+  const handleCapture = async (imgSrc: string) => {
+    setImage(imgSrc);
+    setLoading(true);
+    setProcessingError("");
+    setCompletedSteps([]);
+    setCurrentStep("");
+
+    try {
+      // Step 1: Identify medicine from image
+      setCurrentStep("identify");
+      setCurrentScreen("processing");
+
+      const medicineInfo = await performIdentify({ data: imgSrc });
+      markStepComplete("identify");
+
+      // Continue with processing
+      await processMedicineInfo(medicineInfo);
+    } catch (error) {
+      console.error("Error identifying medicine:", error);
+      setProcessingError(
+        error instanceof Error ? error.message : "Falha ao identificar medicamento da imagem"
+      );
+      setCurrentStep("");
+      setLoading(false);
+    }
+  };
+
+  // Handle manual form submission
+  const handleManualSubmit = async (data: IdentifyMedicineResponse) => {
+    await processMedicineInfo(data);
+  };
+
+  // Reset to landing
   const handleReset = () => {
+    setCurrentScreen("landing");
     setImage(null);
     setMedicineInfo({
       name: "",
@@ -124,6 +166,7 @@ function AppContent() {
     setProcessingError("");
   };
 
+  // Download PDF
   const downloadPdf = () => {
     if (!pdfData) return;
 
@@ -153,35 +196,56 @@ function AppContent() {
     }
   };
 
-  // Show camera capture screen
-  if (!image) {
+  // Render landing page
+  if (currentScreen === "landing") {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gray-50">
-        <Camera onCapture={handleCapture} />
-      </div>
+      <LandingPage
+        onScanMedicine={() => setCurrentScreen("camera")}
+        onManualEntry={() => setCurrentScreen("manualForm")}
+      />
     );
   }
 
-  // Show processing screen
-  if (loading || !completedSteps.includes("ready")) {
+  // Render camera screen
+  if (currentScreen === "camera") {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gray-50">
+      <Camera
+        onCapture={handleCapture}
+        onCancel={() => setCurrentScreen("landing")}
+      />
+    );
+  }
+
+  // Render manual form screen
+  if (currentScreen === "manualForm") {
+    return (
+      <ManualMedicineForm
+        onSubmit={handleManualSubmit}
+        onCancel={() => setCurrentScreen("landing")}
+      />
+    );
+  }
+
+  // Render processing screen
+  if (currentScreen === "processing") {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-white flex items-center justify-center p-4">
         <div className="max-w-2xl w-full space-y-6">
           {/* Processing Steps */}
           {loading && (
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h3 className="text-xl font-bold text-gray-800 mb-4">
+            <div className="bg-white rounded-2xl shadow-xl p-8">
+              <h3 className="text-2xl font-bold text-gray-900 mb-6 text-center">
                 A Processar Informações do Medicamento
               </h3>
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {steps.map((step) => {
                   const isCompleted = completedSteps.includes(step.id);
                   const isCurrent = currentStep === step.id;
 
                   return (
-                    <div key={step.id} className="flex items-center space-x-3">
+                    <div key={step.id} className="flex items-center space-x-4">
                       <div
-                        className={`w-8 h-8 rounded-full flex items-center justify-center text-sm ${
+                        className={`w-12 h-12 rounded-full flex items-center justify-center text-lg ${
                           isCompleted
                             ? "bg-green-500 text-white"
                             : isCurrent
@@ -192,7 +256,7 @@ function AppContent() {
                         {isCompleted ? "✓" : isCurrent ? "⟳" : step.icon}
                       </div>
                       <span
-                        className={`text-base ${
+                        className={`text-lg flex-1 ${
                           isCompleted
                             ? "text-green-700 font-medium"
                             : isCurrent
@@ -204,7 +268,7 @@ function AppContent() {
                       </span>
                       {isCurrent && (
                         <div className="ml-auto">
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
                         </div>
                       )}
                     </div>
@@ -214,26 +278,46 @@ function AppContent() {
             </div>
           )}
 
-          {/* Error Display */}
+          {/* Error Display with fallback options */}
           {processingError && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-              <div className="flex items-center">
-                <div className="text-red-500 mr-2">❌</div>
-                <div>
-                  <h4 className="text-red-800 font-medium">
+            <div className="bg-white rounded-2xl shadow-xl p-8">
+              <div className="flex items-start mb-6">
+                <div className="text-red-500 text-3xl mr-4">❌</div>
+                <div className="flex-1">
+                  <h4 className="text-xl text-red-800 font-bold mb-2">
                     Erro de Processamento
                   </h4>
-                  <p className="text-red-700 text-sm mt-1">
-                    {processingError}
-                  </p>
+                  <p className="text-red-700">{processingError}</p>
                 </div>
               </div>
-              <button
-                onClick={handleReset}
-                className="mt-3 bg-red-600 text-white px-4 py-2 rounded text-sm hover:bg-red-700 transition-colors"
-              >
-                Tentar Novamente
-              </button>
+
+              <div className="border-t border-gray-200 pt-6">
+                <p className="text-gray-700 mb-4 font-medium">
+                  O que deseja fazer?
+                </p>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <button
+                    onClick={() => setCurrentScreen("camera")}
+                    className="px-6 py-4 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center"
+                  >
+                    <span className="mr-2">📸</span>
+                    Tentar com câmara
+                  </button>
+                  <button
+                    onClick={() => setCurrentScreen("manualForm")}
+                    className="px-6 py-4 bg-gray-700 text-white font-medium rounded-lg hover:bg-gray-800 transition-colors flex items-center justify-center"
+                  >
+                    <span className="mr-2">✍️</span>
+                    Introduzir manualmente
+                  </button>
+                </div>
+                <button
+                  onClick={handleReset}
+                  className="w-full mt-4 px-6 py-3 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Voltar ao início
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -241,7 +325,7 @@ function AppContent() {
     );
   }
 
-  // Show main app layout with medicine info and chat
+  // Render results screen (main app)
   return (
     <ResponsiveContainer
       medicineInfoPanel={
