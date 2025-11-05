@@ -4,7 +4,9 @@ import { usePDF } from "../context/PDFContext";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 
 // Configure PDF.js worker
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+// Using local worker file instead of CDN for better performance and reliability
+// The worker is copied to /public during build via scripts/copy-pdf-worker.js
+pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
 interface PDFViewerProps {
   onClose?: () => void;

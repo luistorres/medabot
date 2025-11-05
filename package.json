@@ -9,8 +9,10 @@
   "type": "module",
   "scripts": {
     "dev": "vinxi dev",
-    "build": "vinxi build",
-    "start": "vinxi start"
+    "build": "npm run copy-pdf-worker && vinxi build",
+    "start": "vinxi start",
+    "copy-pdf-worker": "node scripts/copy-pdf-worker.js",
+    "postinstall": "npm run copy-pdf-worker"
   },
   "dependencies": {
     "@langchain/community": "^0.3.44",
