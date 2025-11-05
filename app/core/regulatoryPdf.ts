@@ -51,7 +51,14 @@ async function extractSearchResults(
         const nameCell = await rows[i].$("td:first-child");
         if (nameCell) {
           const name = (await nameCell.textContent())?.trim() || "";
-          if (name) {
+
+          // Skip "no results" messages in Portuguese
+          const isNoResultsMessage =
+            name.toLowerCase().includes("sem resultado") ||
+            name.toLowerCase().includes("no results") ||
+            name.toLowerCase().includes("não foram encontrados");
+
+          if (name && !isNoResultsMessage) {
             const similarity = stringSimilarity(name, expectedName);
             results.push({
               name,
@@ -61,6 +68,8 @@ async function extractSearchResults(
             console.log(
               `Result ${i}: "${name}" (similarity: ${similarity.toFixed(2)})`
             );
+          } else if (isNoResultsMessage) {
+            console.log(`Skipping no-results message: "${name}"`);
           }
         }
       } catch (error) {
