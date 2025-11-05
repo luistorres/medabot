@@ -47,30 +47,49 @@ async function extractSearchResults(
 
     for (let i = 0; i < rows.length; i++) {
       try {
-        // Get the medicine name from the first column
-        const nameCell = await rows[i].$("td:first-child");
-        if (nameCell) {
-          const name = (await nameCell.textContent())?.trim() || "";
+        // Extract all columns to find the medicine name
+        const cells = await rows[i].$$("td");
 
-          // Skip "no results" messages in Portuguese
-          const isNoResultsMessage =
-            name.toLowerCase().includes("sem resultado") ||
-            name.toLowerCase().includes("no results") ||
-            name.toLowerCase().includes("não foram encontrados");
+        // Log all columns for debugging (first row only)
+        if (i === 0) {
+          const allCellTexts = await Promise.all(
+            cells.map(async (cell) => (await cell.textContent())?.trim() || "")
+          );
+          console.log(`Table columns (row 0):`, allCellTexts);
+        }
 
-          if (name && !isNoResultsMessage) {
-            const similarity = stringSimilarity(name, expectedName);
-            results.push({
-              name,
-              rowIndex: i,
-              similarity,
-            });
-            console.log(
-              `Result ${i}: "${name}" (similarity: ${similarity.toFixed(2)})`
-            );
-          } else if (isNoResultsMessage) {
-            console.log(`Skipping no-results message: "${name}"`);
+        // Try to find the medicine name column
+        // Usually the name is in a column with text (not just numbers)
+        let name = "";
+        for (const cell of cells) {
+          const text = (await cell.textContent())?.trim() || "";
+          // Skip empty cells, pure numbers, and very short text
+          if (text && text.length > 3 && !/^\d+$/.test(text)) {
+            name = text;
+            break;
           }
+        }
+
+        // Skip "no results" messages in Portuguese
+        const isNoResultsMessage =
+          name.toLowerCase().includes("sem resultado") ||
+          name.toLowerCase().includes("no results") ||
+          name.toLowerCase().includes("não foram encontrados");
+
+        if (name && !isNoResultsMessage) {
+          const similarity = stringSimilarity(name, expectedName);
+          results.push({
+            name,
+            rowIndex: i,
+            similarity,
+          });
+          console.log(
+            `Result ${i}: "${name}" (similarity: ${similarity.toFixed(2)})`
+          );
+        } else if (isNoResultsMessage) {
+          console.log(`Skipping no-results message: "${name}"`);
+        } else if (!name) {
+          console.log(`Row ${i}: No valid name found (only numbers or empty cells)`);
         }
       } catch (error) {
         console.warn(`Error extracting row ${i}:`, error);
