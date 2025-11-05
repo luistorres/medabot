@@ -9,8 +9,8 @@ const LandingPage = ({ onScanMedicine, onManualEntry }: LandingPageProps) => {
       <div className="max-w-4xl w-full">
         {/* Header */}
         <div className="text-center mb-12">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-blue-600 rounded-2xl mb-6 shadow-lg">
-            <span className="text-4xl">🤖</span>
+          <div className="inline-flex items-center justify-center w-50 h-50 bg-[#b4dae1] rounded-2xl mb-6 shadow-lg">
+            <img src="/logo.png" alt="MedaBot Logo" className="w-full h-full object-contain p-2 rounded-2xl" />
           </div>
           <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
             MedaBot

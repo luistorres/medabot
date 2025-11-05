@@ -1,5 +1,6 @@
 **/build
 **/public
+!public/logo.png
 pnpm-lock.yaml
 node_modules
 dist
