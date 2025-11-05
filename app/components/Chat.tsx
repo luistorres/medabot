@@ -1,5 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { queryLeafletPdf } from "../server/queryLeaflet";
+import { usePDF } from "../context/PDFContext";
+import { useScrollToBottom } from "../hooks/useScrollToBottom";
+import { parseMessageWithReferences } from "../utils/parseReferences";
 
 interface ChatMessage {
   id: string;
@@ -18,7 +21,14 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const { jumpToPage } = usePDF();
+  const { showScrollButton, isAtBottom, scrollToBottom } = useScrollToBottom(
+    messagesContainerRef,
+    { threshold: 150 }
+  );
 
   // Add initial overview as first message
   useEffect(() => {
@@ -35,8 +45,14 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
   }, [initialOverview]);
 
   // Auto-scroll to bottom when new messages are added
+  // Only auto-scroll if user was already at bottom or if it's their own message
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage.type === "user" || isAtBottom) {
+        scrollToBottom("smooth");
+      }
+    }
   }, [messages]);
 
   const handleAskQuestion = async () => {
@@ -92,34 +108,45 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
     "O que devo fazer se me esquecer de uma dose?",
   ];
 
+  const handlePageReferenceClick = (pageNumber: number) => {
+    jumpToPage(pageNumber);
+  };
+
   return (
-    <div className="bg-white rounded-lg shadow-md flex flex-col h-140 md:h-160">
+    <div className="bg-white flex flex-col h-full">
       {/* Header */}
-      <div className="p-3 md:p-4 border-b border-gray-200">
-        <h3 className="text-lg md:text-xl font-bold text-gray-800">
+      <div className="p-4 border-b border-gray-200 flex-shrink-0">
+        <h3 className="text-lg font-bold text-gray-800">
           Questões sobre {medicineName}
         </h3>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-3 md:p-4 space-y-3">
+      <div
+        ref={messagesContainerRef}
+        className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0 scrollbar-thin"
+      >
         {messages.map((message) => (
           <div
             key={message.id}
             className={`flex ${message.type === "user" ? "justify-end" : "justify-start"}`}
           >
             <div
-              className={`max-w-[85%] md:max-w-[80%] p-2 md:p-3 rounded-lg ${
+              className={`max-w-[85%] md:max-w-[75%] p-3 rounded-lg shadow-sm ${
                 message.type === "user"
                   ? "bg-blue-600 text-white"
                   : "bg-gray-100 text-gray-800"
               }`}
             >
-              <p className="text-sm md:text-base whitespace-pre-wrap leading-relaxed">
-                {message.content}
-              </p>
+              <div className="text-sm md:text-base leading-relaxed whitespace-pre-wrap">
+                {message.type === "assistant"
+                  ? parseMessageWithReferences(message.content, {
+                      onPageClick: handlePageReferenceClick,
+                    })
+                  : message.content}
+              </div>
               <p
-                className={`text-xs mt-1 ${
+                className={`text-xs mt-1.5 ${
                   message.type === "user" ? "text-blue-100" : "text-gray-500"
                 }`}
               >
@@ -134,10 +161,10 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
 
         {loading && (
           <div className="flex justify-start">
-            <div className="bg-gray-100 text-gray-800 p-2 md:p-3 rounded-lg">
+            <div className="bg-gray-100 text-gray-800 p-3 rounded-lg shadow-sm">
               <div className="flex items-center space-x-2">
-                <div className="animate-spin rounded-full h-3 w-3 md:h-4 md:w-4 border-b-2 border-gray-600"></div>
-                <span className="text-sm md:text-base">A pensar...</span>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+                <span className="text-sm">A pensar...</span>
               </div>
             </div>
           </div>
@@ -146,18 +173,39 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Scroll to bottom button */}
+      {showScrollButton && (
+        <button
+          onClick={() => scrollToBottom("smooth")}
+          className="fixed bottom-24 right-6 bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-full shadow-lg transition-all z-10"
+          aria-label="Scroll to bottom"
+        >
+          <svg
+            className="w-5 h-5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M19 14l-7 7m0 0l-7-7m7 7V3"
+            />
+          </svg>
+        </button>
+      )}
+
       {/* Sample questions (only show if no messages yet) */}
       {messages.length <= 1 && (
-        <div className="p-3 md:p-4 border-t border-gray-200">
-          <p className="text-xs md:text-sm text-gray-600 mb-2">
-            Experimente perguntar:
-          </p>
-          <div className="flex flex-wrap gap-1 md:gap-2">
+        <div className="p-4 border-t border-gray-200 flex-shrink-0">
+          <p className="text-sm text-gray-600 mb-2">Experimente perguntar:</p>
+          <div className="flex flex-wrap gap-2">
             {sampleQuestions.map((sampleQ) => (
               <button
                 key={sampleQ}
                 onClick={() => setQuestion(sampleQ)}
-                className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded"
+                className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg transition-colors"
               >
                 {sampleQ}
               </button>
@@ -167,21 +215,21 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
       )}
 
       {/* Input */}
-      <div className="p-3 md:p-4 border-t border-gray-200">
+      <div className="p-4 border-t border-gray-200 flex-shrink-0">
         <div className="flex space-x-2">
           <input
             type="text"
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             placeholder="Escreva a sua questão aqui..."
-            className="flex-grow p-2 text-sm md:text-base border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="flex-grow p-3 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             onKeyPress={(e) => e.key === "Enter" && handleAskQuestion()}
             disabled={loading}
           />
           <button
             onClick={handleAskQuestion}
             disabled={loading || !question.trim()}
-            className="bg-blue-600 text-white px-3 md:px-4 py-2 text-sm md:text-base rounded hover:bg-blue-700 disabled:bg-gray-400"
+            className="bg-blue-600 text-white px-6 py-3 text-sm font-medium rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
           >
             Enviar
           </button>
