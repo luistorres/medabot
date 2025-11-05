@@ -19,8 +19,7 @@ const PDFViewer = ({ onClose }: PDFViewerProps) => {
       try {
         const reactPdf = await import("react-pdf");
 
-        // Configure PDF.js worker
-        // Using local worker file instead of CDN for better performance and reliability
+        // Use local worker file (must run npm run copy-pdf-worker first)
         reactPdf.pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
         if (mounted) {

@@ -13,7 +13,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const projectRoot = join(__dirname, '..');
-const workerSource = join(projectRoot, 'node_modules/pdfjs-dist/build/pdf.worker.min.mjs');
+// Copy from react-pdf's bundled pdfjs-dist instead of top-level
+const workerSource = join(projectRoot, 'node_modules/react-pdf/node_modules/pdfjs-dist/build/pdf.worker.min.mjs');
 const publicDir = join(projectRoot, 'public');
 const workerDest = join(publicDir, 'pdf.worker.min.mjs');
 
