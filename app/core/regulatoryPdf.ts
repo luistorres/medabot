@@ -45,7 +45,9 @@ async function extractSearchResults(
     });
 
     // Extract all medicine names from the results table
-    const rows = await page.$$('table[summary="Tabela de resultados"] tbody tr');
+    const rows = await page.$$(
+      'table[summary="Tabela de resultados"] tbody tr'
+    );
 
     console.log(`Found ${rows.length} result rows`);
 
@@ -107,9 +109,9 @@ async function extractSearchResults(
             substanceSimilarity,
           });
           console.log(
-            `Result ${i}: "${name}" | Active: "${activeSubstance || 'N/A'}" ` +
-              `(name: ${nameSimilarity.toFixed(2)}, substance: ${substanceSimilarity.toFixed(2)}, ` +
-              `combined: ${combinedSimilarity.toFixed(2)})`
+            `Result ${i}: "${name}" | Active: "${activeSubstance || "N/A"}" ` +
+            `(name: ${nameSimilarity.toFixed(2)}, substance: ${substanceSimilarity.toFixed(2)}, ` +
+            `combined: ${combinedSimilarity.toFixed(2)})`
           );
         } else if (isNoResultsMessage) {
           console.log(`Skipping no-results message: "${name}"`);
@@ -150,20 +152,18 @@ async function performSearch(
       "https://extranet.infarmed.pt/INFOMED-fo/pesquisa-avancada.xhtml",
       { waitUntil: "networkidle" }
     );
+    
 
-    // Fill the form fields
-    if (attempt.name) {
-      await page.fill('input[title$="Nome do Medicamento"]', attempt.name);
-    }
-    if (attempt.activeSubstance) {
-      await page.fill(
-        'input[title$="Substância Ativa/DCI"]',
-        attempt.activeSubstance
-      );
-    }
-    if (attempt.dosage) {
-      await page.fill('input[title$="Dosagem"]', attempt.dosage);
-    }
+    // Fill the form fields (clear fields not in attempt by filling with empty string)
+    await page.fill(
+      'input[title$="Nome do Medicamento"]',
+      attempt.name || ""
+    );
+    await page.fill(
+      'input[title$="Substância Ativa/DCI"]',
+      attempt.activeSubstance || ""
+    );
+    await page.fill('input[title$="Dosagem"]', attempt.dosage || "");
 
     console.log(
       `Searching with: ${JSON.stringify(attempt, null, 2).replace(/\n/g, " ")}`
@@ -177,11 +177,13 @@ async function performSearch(
       await page.waitForSelector('table[summary="Tabela de resultados"]', {
         timeout: 10000,
       });
+
+
       return true;
     } catch (error) {
       // Check if there's a "no results" message
       const noResultsMsg = await page
-        .locator('text=/não foram encontrados resultados/i')
+        .locator("text=/não foram encontrados resultados/i")
         .first()
         .isVisible()
         .catch(() => false);
@@ -336,9 +338,9 @@ export async function regulatoryPDF(
     const bestMatch = searchResults[0];
     console.log(
       `\nBest match: "${bestMatch.name}" | Active: "${bestMatch.activeSubstance}"\n` +
-        `  Name similarity: ${bestMatch.nameSimilarity.toFixed(2)}\n` +
-        `  Substance similarity: ${bestMatch.substanceSimilarity.toFixed(2)}\n` +
-        `  Combined score: ${bestMatch.similarity.toFixed(2)}`
+      `  Name similarity: ${bestMatch.nameSimilarity.toFixed(2)}\n` +
+      `  Substance similarity: ${bestMatch.substanceSimilarity.toFixed(2)}\n` +
+      `  Combined score: ${bestMatch.similarity.toFixed(2)}`
     );
 
     if (bestMatch.similarity < 0.5) {
@@ -348,7 +350,9 @@ export async function regulatoryPDF(
     }
 
     // Click the RCM link for the best matching result
-    console.log(`Clicking RCM link for result at index ${bestMatch.rowIndex}...`);
+    console.log(
+      `Clicking RCM link for result at index ${bestMatch.rowIndex}...`
+    );
 
     // Build the selector for the specific row
     const rcmSelector = `table[summary="Tabela de resultados"] tbody tr:nth-child(${bestMatch.rowIndex + 1}) a[id$="pesqAvancadaDatableRcmIcon"]`;

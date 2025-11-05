@@ -1,5 +1,6 @@
 import { openai } from "./llm";
 import { z } from "zod";
+import { IDENTIFY_MEDICINE_PROMPT } from "./identify_prompt";
 
 const IdentifyMedicineSchema = z.object({
   name: z.string(),
@@ -16,18 +17,12 @@ export const identifyMedicine = async (
   const base64Image = image.split(",")[1];
 
   const completion = await openai.chat.completions.create({
-    model: "gpt-4.1-nano",
+    model: "gpt-4.1-mini",
+    response_format: { type: "json_object" },
     messages: [
       {
         role: "system",
-        content: `You are a pharmaceutical expert analyzing medicine packaging images. Extract medicine details from the image.
-Return only a JSON object in this format, with no additional text and make sure to keep the portuguese names:
-{
-  "name": "standardized medicine name",
-  "brand": "manufacturer/brand name",
-  "activeSubstance": "primary active ingredients",
-  "dosage": "dosage form with standard pharmaceutical units (e.g., 1 g, 500 mg)"
-}`,
+        content: IDENTIFY_MEDICINE_PROMPT,
       },
       {
         role: "user",
@@ -51,10 +46,10 @@ Return only a JSON object in this format, with no additional text and make sure 
   }
 
   try {
-  const parsed = IdentifyMedicineSchema.parse(
-    JSON.parse(completion.choices[0].message.content)
-  );
-  return parsed;
+    const parsed = IdentifyMedicineSchema.parse(
+      JSON.parse(completion.choices[0].message.content)
+    );
+    return parsed;
   } catch (error) {
     throw new Error("Não foi possível identificar o medicamento");
   }
