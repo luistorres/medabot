@@ -4,9 +4,10 @@ import { useMediaQuery } from "../hooks/useMediaQuery";
 
 interface PDFViewerProps {
   onClose?: () => void;
+  width?: number; // Width in rem units (for desktop)
 }
 
-const PDFViewer = ({ onClose }: PDFViewerProps) => {
+const PDFViewer = ({ onClose, width = 40 }: PDFViewerProps) => {
   // Don't render on server - PDF.js needs browser APIs
   const [isClient, setIsClient] = useState(false);
   const [pdfComponents, setPdfComponents] = useState<any>(null);
@@ -179,6 +180,10 @@ const PDFViewer = ({ onClose }: PDFViewerProps) => {
     );
   }
 
+  // Calculate PDF page width based on container width
+  // Convert rem to pixels (1rem = 16px), subtract padding (2rem = 32px)
+  const pageWidth = (width * 16) - 32;
+
   // Desktop: Sidebar panel
   return (
     <div className="h-full flex flex-col bg-white border-l border-gray-200">
@@ -213,7 +218,8 @@ const PDFViewer = ({ onClose }: PDFViewerProps) => {
         >
           <Page
             pageNumber={currentPage}
-            width={360}
+            width={pageWidth}
+            scale={scale}
             renderTextLayer={false}
             renderAnnotationLayer={false}
             className="shadow-md"
