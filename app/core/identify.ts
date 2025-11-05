@@ -50,9 +50,12 @@ Return only a JSON object in this format, with no additional text:
     throw new Error("No content in response");
   }
 
+  try {
   const parsed = IdentifyMedicineSchema.parse(
     JSON.parse(completion.choices[0].message.content)
   );
-
   return parsed;
+  } catch (error) {
+    throw new Error("Não foi possível identificar o medicamento");
+  }
 };
