@@ -14,7 +14,7 @@ const DesktopLayout = ({
   showPdfViewer = true,
 }: DesktopLayoutProps) => {
   const { isPdfViewerOpen } = usePDF();
-  const [pdfWidth, setPdfWidth] = useState(40); // Start at 40rem (640px) - much bigger!
+  const [pdfWidth, setPdfWidth] = useState(60);
   const [isResizing, setIsResizing] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 

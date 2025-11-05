@@ -174,10 +174,11 @@ async function performSearch(
 
     // Wait for results or error message
     try {
+      // await for 2 seconds before checking for results as the page always displays this table
+      await page.waitForTimeout(2000);
       await page.waitForSelector('table[summary="Tabela de resultados"]', {
         timeout: 10000,
       });
-
 
       return true;
     } catch (error) {

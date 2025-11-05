@@ -25,23 +25,4 @@ const updateCount = createServerFn({ method: "POST" })
 
 export const Route = createFileRoute("/")({
   component: App,
-  //   loader: async () => await getCount(),
 });
-
-// function Home() {
-//   const router = useRouter();
-//   const state = Route.useLoaderData();
-
-//   return (
-//     <button
-//       type="button"
-//       onClick={() => {
-//         updateCount({ data: 1 }).then(() => {
-//           router.invalidate();
-//         });
-//       }}
-//     >
-//       Add 1 to {state}?
-//     </button>
-//   );
-// }

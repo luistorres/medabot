@@ -21,10 +21,11 @@ export const PDFProvider = ({ children }: { children: ReactNode }) => {
   const [isPdfViewerOpen, setIsPdfViewerOpen] = useState<boolean>(false);
 
   const jumpToPage = (page: number) => {
+    setIsPdfViewerOpen(true);
+
     if (page >= 1 && page <= totalPages) {
       setCurrentPage(page);
       // Open PDF viewer when clicking a page reference
-      setIsPdfViewerOpen(true);
     }
   };
 
