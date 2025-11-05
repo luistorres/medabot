@@ -1,4 +1,4 @@
-FROM node:18-slim
+FROM node:20-slim
 
 # Install system dependencies for Playwright
 RUN apt-get update && apt-get install -y \
@@ -31,8 +31,9 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy package files
+# Copy package files and scripts folder (needed for postinstall)
 COPY package*.json ./
+COPY scripts ./scripts
 
 # Install all dependencies (including dev dependencies for build)
 RUN npm ci
