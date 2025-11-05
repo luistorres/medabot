@@ -23,14 +23,18 @@ function stringSimilarity(str1: string, str2: string): number {
 
 interface SearchResult {
   name: string;
+  activeSubstance: string;
   rowIndex: number;
   similarity: number;
+  nameSimilarity: number;
+  substanceSimilarity: number;
 }
 
 // Extract and validate search results from the table
 async function extractSearchResults(
   page: Page,
-  expectedName: string
+  expectedName: string,
+  expectedActiveSubstance: string
 ): Promise<SearchResult[]> {
   try {
     const results: SearchResult[] = [];
@@ -47,27 +51,34 @@ async function extractSearchResults(
 
     for (let i = 0; i < rows.length; i++) {
       try {
-        // Extract all columns to find the medicine name
+        // Extract all columns
         const cells = await rows[i].$$("td");
+        const allCellTexts = await Promise.all(
+          cells.map(async (cell) => (await cell.textContent())?.trim() || "")
+        );
 
         // Log all columns for debugging (first row only)
         if (i === 0) {
-          const allCellTexts = await Promise.all(
-            cells.map(async (cell) => (await cell.textContent())?.trim() || "")
-          );
           console.log(`Table columns (row 0):`, allCellTexts);
         }
 
-        // Try to find the medicine name column
-        // Usually the name is in a column with text (not just numbers)
+        // Extract medicine name (column 1) and active substance (column 2)
+        // Column 0 is typically a hidden ID, so we skip pure numbers
         let name = "";
-        for (const cell of cells) {
-          const text = (await cell.textContent())?.trim() || "";
+        let activeSubstance = "";
+        let columnIndex = 0;
+
+        for (const text of allCellTexts) {
           // Skip empty cells, pure numbers, and very short text
           if (text && text.length > 3 && !/^\d+$/.test(text)) {
-            name = text;
-            break;
+            if (!name) {
+              name = text; // First text column = medicine name
+            } else if (!activeSubstance) {
+              activeSubstance = text; // Second text column = active substance
+              break;
+            }
           }
+          columnIndex++;
         }
 
         // Skip "no results" messages in Portuguese
@@ -77,19 +88,35 @@ async function extractSearchResults(
           name.toLowerCase().includes("não foram encontrados");
 
         if (name && !isNoResultsMessage) {
-          const similarity = stringSimilarity(name, expectedName);
+          // Calculate similarity for both name and active substance
+          const nameSimilarity = stringSimilarity(name, expectedName);
+          const substanceSimilarity = activeSubstance
+            ? stringSimilarity(activeSubstance, expectedActiveSubstance)
+            : 0;
+
+          // Weighted combined similarity: 70% name, 30% active substance
+          const combinedSimilarity =
+            nameSimilarity * 0.7 + substanceSimilarity * 0.3;
+
           results.push({
             name,
+            activeSubstance: activeSubstance || "(unknown)",
             rowIndex: i,
-            similarity,
+            similarity: combinedSimilarity,
+            nameSimilarity,
+            substanceSimilarity,
           });
           console.log(
-            `Result ${i}: "${name}" (similarity: ${similarity.toFixed(2)})`
+            `Result ${i}: "${name}" | Active: "${activeSubstance || 'N/A'}" ` +
+              `(name: ${nameSimilarity.toFixed(2)}, substance: ${substanceSimilarity.toFixed(2)}, ` +
+              `combined: ${combinedSimilarity.toFixed(2)})`
           );
         } else if (isNoResultsMessage) {
           console.log(`Skipping no-results message: "${name}"`);
         } else if (!name) {
-          console.log(`Row ${i}: No valid name found (only numbers or empty cells)`);
+          console.log(
+            `Row ${i}: No valid name found (only numbers or empty cells)`
+          );
         }
       } catch (error) {
         console.warn(`Error extracting row ${i}:`, error);
@@ -272,7 +299,12 @@ export async function regulatoryPDF(
       if (success) {
         // Extract and validate results
         const expectedName = medicineInfo.name;
-        searchResults = await extractSearchResults(page, expectedName);
+        const expectedActiveSubstance = medicineInfo.activeSubstance;
+        searchResults = await extractSearchResults(
+          page,
+          expectedName,
+          expectedActiveSubstance
+        );
 
         if (searchResults.length > 0) {
           successfulStrategy = searchStrategies[i];
@@ -303,7 +335,10 @@ export async function regulatoryPDF(
     // Select the best match
     const bestMatch = searchResults[0];
     console.log(
-      `\nBest match: "${bestMatch.name}" (similarity: ${bestMatch.similarity.toFixed(2)})`
+      `\nBest match: "${bestMatch.name}" | Active: "${bestMatch.activeSubstance}"\n` +
+        `  Name similarity: ${bestMatch.nameSimilarity.toFixed(2)}\n` +
+        `  Substance similarity: ${bestMatch.substanceSimilarity.toFixed(2)}\n` +
+        `  Combined score: ${bestMatch.similarity.toFixed(2)}`
     );
 
     if (bestMatch.similarity < 0.5) {
