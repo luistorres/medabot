@@ -20,6 +20,7 @@
     "@tailwindcss/vite": "^4.0.14",
     "@tanstack/react-router": "^1.114.17",
     "@tanstack/react-start": "^1.114.19",
+    "fastest-levenshtein": "^1.0.16",
     "langchain": "^0.3.27",
     "openai": "^4.87.3",
     "pdf-parse": "^1.1.1",

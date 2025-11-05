@@ -1,8 +1,9 @@
 import { chromium, Page, BrowserContext } from "playwright";
 import { IdentifyMedicineResponse } from "./identify";
+import { distance } from "fastest-levenshtein";
 import * as fs from "node:fs";
 
-// Simple string similarity function for fuzzy matching
+// String similarity function using fastest-levenshtein for fuzzy matching
 function stringSimilarity(str1: string, str2: string): number {
   const s1 = str1.toLowerCase().trim();
   const s2 = str2.toLowerCase().trim();
@@ -10,42 +11,14 @@ function stringSimilarity(str1: string, str2: string): number {
   if (s1 === s2) return 1.0;
   if (s1.includes(s2) || s2.includes(s1)) return 0.8;
 
-  // Levenshtein distance-based similarity
+  // Levenshtein distance-based similarity using fastest-levenshtein
   const longer = s1.length > s2.length ? s1 : s2;
   const shorter = s1.length > s2.length ? s2 : s1;
 
   if (longer.length === 0) return 1.0;
 
-  const editDistance = levenshteinDistance(longer, shorter);
+  const editDistance = distance(longer, shorter);
   return (longer.length - editDistance) / longer.length;
-}
-
-function levenshteinDistance(str1: string, str2: string): number {
-  const matrix: number[][] = [];
-
-  for (let i = 0; i <= str2.length; i++) {
-    matrix[i] = [i];
-  }
-
-  for (let j = 0; j <= str1.length; j++) {
-    matrix[0][j] = j;
-  }
-
-  for (let i = 1; i <= str2.length; i++) {
-    for (let j = 1; j <= str1.length; j++) {
-      if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
-        matrix[i][j] = matrix[i - 1][j - 1];
-      } else {
-        matrix[i][j] = Math.min(
-          matrix[i - 1][j - 1] + 1,
-          matrix[i][j - 1] + 1,
-          matrix[i - 1][j] + 1
-        );
-      }
-    }
-  }
-
-  return matrix[str2.length][str1.length];
 }
 
 interface SearchResult {
