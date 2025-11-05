@@ -5,9 +5,10 @@ import { useMediaQuery } from "../hooks/useMediaQuery";
 interface PDFViewerProps {
   onClose?: () => void;
   width?: number; // Width in rem units (for desktop)
+  isTabMode?: boolean; // When true, renders as a tab content (no modal, no close button)
 }
 
-const PDFViewer = ({ onClose, width = 40 }: PDFViewerProps) => {
+const PDFViewer = ({ onClose, width = 40, isTabMode = false }: PDFViewerProps) => {
   // Don't render on server - PDF.js needs browser APIs
   const [isClient, setIsClient] = useState(false);
   const [pdfComponents, setPdfComponents] = useState<any>(null);
@@ -97,14 +98,86 @@ const PDFViewer = ({ onClose, width = 40 }: PDFViewerProps) => {
   };
 
   // Don't render until we're on the client and PDF components are loaded (SSR safety)
-  if (!isClient || !pdfComponents || !pdfDataUrl || !isPdfViewerOpen) {
+  // In tab mode, always render when ready; otherwise check if viewer is open
+  if (!isClient || !pdfComponents || !pdfDataUrl || (!isTabMode && !isPdfViewerOpen)) {
     return null;
   }
 
   const { Document, Page } = pdfComponents;
 
-  // Mobile: Full-screen modal
+  // Mobile: Tab mode (embedded in tab container) or Full-screen modal
   if (!isDesktop) {
+    // Tab mode: Contained view without modal overlay
+    if (isTabMode) {
+      return (
+        <div className="h-full bg-white flex flex-col">
+          {/* Header */}
+          <div className="h-14 border-b border-gray-200 flex items-center justify-between px-4 flex-shrink-0">
+            <h3 className="text-lg font-semibold text-gray-800">
+              Folheto Informativo
+            </h3>
+          </div>
+
+          {/* PDF Content */}
+          <div className="flex-1 overflow-auto bg-gray-100 flex flex-col items-center p-4 scrollbar-thin min-h-0">
+            {loading && (
+              <div className="flex items-center justify-center h-full">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+              </div>
+            )}
+
+            <Document
+              file={pdfDataUrl}
+              onLoadSuccess={handleDocumentLoadSuccess}
+              onLoadError={handleDocumentLoadError}
+              loading={null}
+              className="max-w-full"
+            >
+              <Page
+                pageNumber={currentPage}
+                scale={scale}
+                renderTextLayer={false}
+                renderAnnotationLayer={false}
+                className="shadow-lg"
+              />
+            </Document>
+          </div>
+
+          {/* Controls */}
+          <div className="h-16 border-t border-gray-200 flex items-center justify-between px-4 bg-white flex-shrink-0">
+            <button
+              onClick={goToPreviousPage}
+              disabled={currentPage <= 1}
+              className="px-4 py-2 bg-blue-600 text-white rounded disabled:bg-gray-300 disabled:cursor-not-allowed text-sm font-medium"
+            >
+              ◀ Anterior
+            </button>
+
+            <div className="flex items-center space-x-3">
+              <span className="text-sm font-medium text-gray-700">
+                Página {currentPage} de {totalPages}
+              </span>
+              <button
+                onClick={cycleZoom}
+                className="px-3 py-2 bg-gray-200 text-gray-800 rounded text-sm font-medium hover:bg-gray-300"
+              >
+                {Math.round(scale * 100)}%
+              </button>
+            </div>
+
+            <button
+              onClick={goToNextPage}
+              disabled={currentPage >= totalPages}
+              className="px-4 py-2 bg-blue-600 text-white rounded disabled:bg-gray-300 disabled:cursor-not-allowed text-sm font-medium"
+            >
+              Próxima ▶
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // Modal mode: Full-screen overlay
     return (
       <div className="fixed inset-0 z-50 bg-white flex flex-col">
         {/* Header */}

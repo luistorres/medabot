@@ -26,7 +26,13 @@ const ResponsiveContainer = ({
     );
   }
 
-  return <MobileLayout medicineInfoPanel={medicineInfoPanel} chat={chat} />;
+  return (
+    <MobileLayout
+      medicineInfoPanel={medicineInfoPanel}
+      chat={chat}
+      showPdfViewer={showPdfViewer}
+    />
+  );
 };
 
 export default ResponsiveContainer;
