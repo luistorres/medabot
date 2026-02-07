@@ -1,9 +1,17 @@
 import { createServerFn } from "@tanstack/react-start";
-import { processLeaflet, queryLeaflet } from "../core/leafletProcessor";
+import { processLeaflet, queryLeaflet, ChunkWithEmbedding } from "../core/leafletProcessor";
+import { createHash } from "crypto";
 
 interface QueryRequest {
   pdfBase64: string;
   question: string;
+}
+
+// Module-level cache: PDF hash → processed chunks
+const chunkCache = new Map<string, ChunkWithEmbedding[]>();
+
+function hashPdf(pdfBase64: string): string {
+  return createHash("sha256").update(pdfBase64).digest("hex");
 }
 
 export const queryLeafletPdf = createServerFn({
@@ -12,8 +20,15 @@ export const queryLeafletPdf = createServerFn({
   .inputValidator((data: QueryRequest) => data)
   .handler(async ({ data }) => {
     try {
-      // Process the PDF into embedded chunks
-      const { chunks } = await processLeaflet(data.pdfBase64);
+      const pdfHash = hashPdf(data.pdfBase64);
+      let chunks = chunkCache.get(pdfHash);
+
+      if (!chunks) {
+        // Process only on first query for this PDF
+        const result = await processLeaflet(data.pdfBase64);
+        chunks = result.chunks;
+        chunkCache.set(pdfHash, chunks);
+      }
 
       // Query the leaflet
       const result = await queryLeaflet(chunks, data.question);

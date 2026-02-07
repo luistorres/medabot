@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { regulatoryPDF } from "../core/regulatoryPdf";
+import { regulatoryPDF, SearchCandidate } from "../core/regulatoryPdf";
 import { IdentifyMedicineResponse } from "../core/identify";
 
 export const fetchRegulatoryPdf = createServerFn({
@@ -7,13 +7,14 @@ export const fetchRegulatoryPdf = createServerFn({
 })
   .inputValidator((medicineInfo: IdentifyMedicineResponse) => medicineInfo)
   .handler(async ({ data }) => {
-    const { rcm } = await regulatoryPDF(data);
+    const result = await regulatoryPDF(data);
 
-    // Convert Buffer to Base64 string if not null
-    if (rcm) {
+    if (result.rcm) {
       return {
-        data: rcm.toString("base64"),
+        data: result.rcm.toString("base64"),
         contentType: "application/pdf",
+        candidates: result.candidates,
+        confidence: result.confidence,
       };
     }
 

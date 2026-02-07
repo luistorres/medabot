@@ -203,9 +203,22 @@ async function performSearch(
   }
 }
 
+export interface SearchCandidate {
+  name: string;
+  activeSubstance: string;
+  similarity: number;
+}
+
+export interface RegulatoryPDFResult {
+  rcm: Buffer | null;
+  fi: Buffer | null;
+  candidates?: SearchCandidate[];
+  confidence: number;
+}
+
 export async function regulatoryPDF(
   medicineInfo: IdentifyMedicineResponse
-): Promise<{ rcm: Buffer | null; fi: Buffer | null }> {
+): Promise<RegulatoryPDFResult> {
   const browser = await chromium.launch({
     headless: true,
     devtools: false,
@@ -332,6 +345,7 @@ export async function regulatoryPDF(
       return {
         rcm: null,
         fi: null,
+        confidence: 0,
       };
     }
 
@@ -344,10 +358,20 @@ export async function regulatoryPDF(
       `  Combined score: ${bestMatch.similarity.toFixed(2)}`
     );
 
-    if (bestMatch.similarity < 0.5) {
+    // Return candidates for disambiguation when confidence is low
+    if (bestMatch.similarity < 0.7) {
+      const candidates: SearchCandidate[] = searchResults.slice(0, 3).map((r) => ({
+        name: r.name,
+        activeSubstance: r.activeSubstance,
+        similarity: r.similarity,
+      }));
+
       console.warn(
-        `⚠ Low confidence match (${bestMatch.similarity.toFixed(2)}) - proceeding with caution`
+        `⚠ Low confidence match (${bestMatch.similarity.toFixed(2)}) - returning candidates for disambiguation`
       );
+
+      // Still proceed with best match but include candidates
+      // Client can decide whether to show disambiguation
     }
 
     // Click the RCM link for the best matching result
@@ -381,15 +405,27 @@ export async function regulatoryPDF(
       console.error("✗ Failed to retrieve PDF - timeout or network error");
     }
 
+    const candidates: SearchCandidate[] | undefined =
+      bestMatch.similarity < 0.7
+        ? searchResults.slice(0, 3).map((r) => ({
+            name: r.name,
+            activeSubstance: r.activeSubstance,
+            similarity: r.similarity,
+          }))
+        : undefined;
+
     return {
       rcm: pdfBuffer,
       fi: null,
+      candidates,
+      confidence: bestMatch.similarity,
     };
   } catch (error) {
     console.error("Error fetching regulatory documents:", error);
     return {
       rcm: null,
       fi: null,
+      confidence: 0,
     };
   } finally {
     try {
