@@ -5,7 +5,7 @@ import { IdentifyMedicineResponse } from "../core/identify";
 export const fetchRegulatoryPdf = createServerFn({
   method: "POST",
 })
-  .validator((medicineInfo: IdentifyMedicineResponse) => medicineInfo)
+  .inputValidator((medicineInfo: IdentifyMedicineResponse) => medicineInfo)
   .handler(async ({ data }) => {
     const { rcm } = await regulatoryPDF(data);
 

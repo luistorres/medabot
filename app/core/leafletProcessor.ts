@@ -1,76 +1,89 @@
-import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
-import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
-import { OpenAIEmbeddings } from "@langchain/openai";
-import { MemoryVectorStore } from "@langchain/classic/vectorstores/memory";
-import { ChatOpenAI } from "@langchain/openai";
-import { ChatPromptTemplate } from "@langchain/core/prompts";
-import { StringOutputParser } from "@langchain/core/output_parsers";
-import { RunnableSequence } from "@langchain/core/runnables";
-import { Document } from "@langchain/core/documents";
+import pdfParse from "pdf-parse";
+import { openai } from "./llm";
 
-// Process PDF and create a retriever
+export interface Chunk {
+  text: string;
+  page: number;
+}
+
+export interface ChunkWithEmbedding extends Chunk {
+  embedding: number[];
+}
+
+// Split text into overlapping chunks, preferring paragraph boundaries
+function splitText(text: string, chunkSize = 800, overlap = 150): string[] {
+  const chunks: string[] = [];
+  let start = 0;
+  while (start < text.length) {
+    let end = start + chunkSize;
+    // Try to break at a paragraph or sentence boundary
+    if (end < text.length) {
+      const slice = text.slice(start, end);
+      const lastParagraph = slice.lastIndexOf("\n\n");
+      const lastNewline = slice.lastIndexOf("\n");
+      const lastSentence = slice.lastIndexOf(". ");
+      if (lastParagraph > chunkSize * 0.5) end = start + lastParagraph;
+      else if (lastNewline > chunkSize * 0.5) end = start + lastNewline;
+      else if (lastSentence > chunkSize * 0.5) end = start + lastSentence + 1;
+    }
+    chunks.push(text.slice(start, end).trim());
+    start = end - overlap;
+  }
+  return chunks.filter((c) => c.length > 0);
+}
+
+function cosineSimilarity(a: number[], b: number[]): number {
+  let dot = 0,
+    normA = 0,
+    normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+}
+
+async function embedTexts(texts: string[]): Promise<number[][]> {
+  const resp = await openai.embeddings.create({
+    model: "text-embedding-3-small",
+    input: texts,
+  });
+  return resp.data.map((d) => d.embedding);
+}
+
+// Process PDF: extract text, chunk, embed
 export async function processLeaflet(pdfBase64: string) {
   try {
-    // Convert base64 to Buffer
     const pdfBuffer = Buffer.from(pdfBase64, "base64");
+    const pdf = await pdfParse(pdfBuffer);
 
-    // Create a blob from the buffer
-    const blob = new Blob([pdfBuffer], { type: "application/pdf" });
+    const textChunks = splitText(pdf.text);
 
-    // Load PDF document
-    const loader = new PDFLoader(blob);
-    const docs = await loader.load();
-
-    // Split into chunks with better parameters for medical documents
-    // Medical PDFs often have dense information, so slightly smaller chunks work better
-    const splitter = new RecursiveCharacterTextSplitter({
-      chunkSize: 800,  // Reduced from 1000 for more precise retrieval
-      chunkOverlap: 150, // Reduced from 200 to avoid too much duplication
-      separators: ["\n\n", "\n", ". ", " ", ""], // Prioritize paragraph breaks
+    // Estimate page numbers from position in full text
+    const totalPages = pdf.numpages;
+    const chunks: Chunk[] = textChunks.map((text, i) => {
+      const position = i / textChunks.length;
+      const page = Math.min(
+        Math.ceil(position * totalPages) + 1,
+        totalPages,
+      );
+      return { text, page };
     });
 
-    const splitDocs = await splitter.splitDocuments(docs);
+    // Embed all chunks in one batch
+    const embeddings = await embedTexts(chunks.map((c) => c.text));
 
-    // Enhance documents with page number metadata
-    const enhancedDocs = splitDocs.map((doc) => {
-      // Extract page number from metadata (PDFLoader provides this)
-      const pageNum = doc.metadata?.loc?.pageNumber || doc.metadata?.page || 0;
-
-      return new Document({
-        pageContent: doc.pageContent,
-        metadata: {
-          ...doc.metadata,
-          page: pageNum,
-          source: "patient_leaflet",
-        },
-      });
-    });
-
-    // Create vector store with better embeddings model
-    const vectorStore = await MemoryVectorStore.fromDocuments(
-      enhancedDocs,
-      new OpenAIEmbeddings({
-        apiKey: process.env.OPENAI_API_KEY,
-        model: "text-embedding-3-small",
-      })
+    const chunksWithEmbeddings: ChunkWithEmbedding[] = chunks.map(
+      (chunk, i) => ({
+        ...chunk,
+        embedding: embeddings[i],
+      }),
     );
 
-    // Create retriever with MMR for better diversity
-    // MMR (Maximum Marginal Relevance) retrieves diverse but relevant documents
-    const retriever = vectorStore.asRetriever({
-      searchType: "mmr",
-      k: 6,
-      searchKwargs: {
-        fetchK: 20,
-        lambda: 0.5,
-      },
-    });
-
     return {
-      retriever,
-      vectorStore,
-      documentCount: enhancedDocs.length,
-      chunks: enhancedDocs,
+      chunks: chunksWithEmbeddings,
+      documentCount: chunksWithEmbeddings.length,
     };
   } catch (error) {
     console.error("Error processing leaflet:", error);
@@ -78,94 +91,82 @@ export async function processLeaflet(pdfBase64: string) {
   }
 }
 
-// Improved function to query the leaflet with better RAG patterns
-export async function queryLeaflet(retriever: any, question: string) {
+// Query the leaflet: embed question, similarity search, chat completion
+export async function queryLeaflet(
+  chunks: ChunkWithEmbedding[],
+  question: string,
+) {
   try {
-    // Get relevant documents using the retriever
-    const relevantDocs = await retriever.invoke(question);
+    // Embed the question
+    const [questionEmbedding] = await embedTexts([question]);
 
-    // Format context with page numbers for better citations
-    const contextWithPages = relevantDocs
-      .map((doc: any, idx: number) => {
-        const page = doc.metadata?.page || "desconhecida";
-        return `[Página ${page}]\n${doc.pageContent}`;
-      })
+    // Top-k cosine similarity search
+    const relevantChunks = chunks
+      .map((chunk) => ({
+        chunk,
+        score: cosineSimilarity(questionEmbedding, chunk.embedding),
+      }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 6)
+      .map((s) => s.chunk);
+
+    // Format context with page numbers for citations
+    const contextWithPages = relevantChunks
+      .map((c) => `[Página ${c.page}]\n${c.text}`)
       .join("\n\n---\n\n");
 
-    // Extract unique page numbers for reference
-    const pageNumbers = [...new Set(
-      relevantDocs
-        .map((doc: any) => doc.metadata?.page)
-        .filter((page: any) => page !== undefined && page !== 0)
-    )].sort((a: number, b: number) => a - b);
+    const pageNumbers = [
+      ...new Set(relevantChunks.map((c) => c.page)),
+    ].sort((a, b) => a - b);
 
-    // Improved prompt template with explicit page citation instructions
-    const prompt = ChatPromptTemplate.fromTemplate(`
-Você é um assistente médico especializado em fornecer informações APENAS do folheto informativo do paciente.
+    const pagesStr =
+      pageNumbers.length > 0
+        ? pageNumbers.join(", ")
+        : "Páginas não identificadas";
 
-Contexto do folheto (com indicação de páginas):
-{context}
-
-Questão do paciente: {question}
+    // Direct chat completion — same pattern as identify.ts
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      temperature: 0.1,
+      max_tokens: 1000,
+      messages: [
+        {
+          role: "system",
+          content: `Você é um assistente médico especializado em fornecer informações APENAS do folheto informativo do paciente.
 
 Instruções importantes:
-1. Responda APENAS com base no contexto fornecido acima
+1. Responda APENAS com base no contexto fornecido
 2. Quando citar informações, mencione a página: "De acordo com a página X, ..." ou "Conforme indicado na página X, ..."
 3. Se a informação não estiver no folheto, diga: "Não encontro essa informação no folheto informativo. Recomendo consultar um profissional de saúde."
 4. Não invente ou infira informações que não estejam explicitamente no contexto
 5. Seja preciso e cite seções específicas quando possível
 6. Sempre recomende consultar profissionais de saúde para aconselhamento médico personalizado
 7. Use uma linguagem clara e acessível
-8. Organize a resposta de forma estruturada quando apropriado
+8. Organize a resposta de forma estruturada quando apropriado`,
+        },
+        {
+          role: "user",
+          content: `Contexto do folheto (com indicação de páginas):
+${contextWithPages}
 
-Páginas relevantes encontradas: {pages}
+Páginas relevantes encontradas: ${pagesStr}
 
-Resposta:
-    `);
-
-    // gpt-4o-mini: cheapest mini model ($0.15/$0.60 per 1M tokens)
-    // Consider gpt-5-mini for better performance when available
-    const llm = new ChatOpenAI({
-      model: "gpt-4o-mini",
-      temperature: 0.1,
-      apiKey: process.env.OPENAI_API_KEY,
-      maxTokens: 1000,
+Questão do paciente: ${question}`,
+        },
+      ],
     });
 
-    // Create a LangChain runnable sequence (modern pattern)
-    const chain = RunnableSequence.from([
-      {
-        context: () => contextWithPages,
-        question: (input: { question: string }) => input.question,
-        pages: () => pageNumbers.length > 0
-          ? pageNumbers.join(", ")
-          : "Páginas não identificadas",
-      },
-      prompt,
-      llm,
-      new StringOutputParser(),
-    ]);
-
-    // Invoke the chain
-    const answer = await chain.invoke({ question });
+    const answer = response.choices[0]?.message?.content || "Sem resposta.";
 
     return {
       answer,
-      sourceDocuments: relevantDocs,
+      sourceDocuments: relevantChunks,
       context: contextWithPages,
-      pageNumbers, // Return page numbers for UI display
+      pageNumbers,
       relevantPages: pageNumbers,
     };
   } catch (error) {
     console.error("Error querying leaflet:", error);
     throw error;
   }
-}
-
-// Optional: Streaming version for better UX (can be implemented later)
-export async function queryLeafletStream(retriever: any, question: string) {
-  // Similar to above but with streaming support
-  // Can be implemented if you want to show progressive responses
-  // For now, this is a placeholder for future enhancement
-  throw new Error("Streaming not implemented yet");
 }

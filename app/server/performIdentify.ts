@@ -4,7 +4,7 @@ import { identifyMedicine } from "../core/identify";
 export const performIdentify = createServerFn({
   method: "POST",
 })
-  .validator((imgSrc: string) => imgSrc)
+  .inputValidator((imgSrc: string) => imgSrc)
   .handler(async ({ data }) => {
     return await identifyMedicine(data);
   });

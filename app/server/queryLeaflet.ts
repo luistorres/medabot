@@ -9,21 +9,21 @@ interface QueryRequest {
 export const queryLeafletPdf = createServerFn({
   method: "POST",
 })
-  .validator((data: QueryRequest) => data)
+  .inputValidator((data: QueryRequest) => data)
   .handler(async ({ data }) => {
     try {
-      // Process the PDF to get the retriever
-      const { retriever } = await processLeaflet(data.pdfBase64);
+      // Process the PDF into embedded chunks
+      const { chunks } = await processLeaflet(data.pdfBase64);
 
       // Query the leaflet
-      const result = await queryLeaflet(retriever, data.question);
+      const result = await queryLeaflet(chunks, data.question);
 
       return {
         success: true,
         answer: result.answer,
         sourceCount: result.sourceDocuments.length,
-        pageNumbers: result.pageNumbers || [], // Include page numbers for citation
-        relevantPages: result.relevantPages || [], // Include relevant pages
+        pageNumbers: result.pageNumbers || [],
+        relevantPages: result.relevantPages || [],
       };
     } catch (error) {
       console.error("Error querying leaflet:", error);

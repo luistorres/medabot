@@ -31,13 +31,12 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy package files, .npmrc, and scripts folder (needed for postinstall)
+# Copy package files and scripts folder (needed for postinstall)
 COPY package*.json ./
-COPY .npmrc ./
 COPY scripts ./scripts
 
 # Install all dependencies (including dev dependencies for build)
-RUN npm ci --legacy-peer-deps
+RUN npm ci
 
 # Copy source code
 COPY . .
@@ -55,4 +54,4 @@ RUN npm prune --production
 EXPOSE 3000
 
 # Start the application
-CMD ["npm", "start"] 
+CMD ["node", ".output/server/index.mjs"]
