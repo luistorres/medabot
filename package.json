@@ -8,21 +8,15 @@
   "license": "ISC",
   "type": "module",
   "scripts": {
-    "dev": "vinxi dev",
-    "build": "npm run copy-pdf-worker && vinxi build",
-    "start": "vinxi start",
+    "dev": "vite dev",
+    "build": "npm run copy-pdf-worker && vite build",
+    "start": "node .output/server/index.mjs",
     "copy-pdf-worker": "node scripts/copy-pdf-worker.js",
     "postinstall": "npm run copy-pdf-worker"
   },
   "dependencies": {
-    "@langchain/classic": "^1.0.9",
-    "@langchain/community": "^1.1.12",
-    "@langchain/core": "^1.1.19",
-    "@langchain/openai": "^1.2.5",
-    "@langchain/textsplitters": "^1.0.1",
-    "@tailwindcss/vite": "^4.0.14",
-    "@tanstack/react-router": "^1.114.17",
-    "@tanstack/react-start": "^1.114.19",
+    "@tanstack/react-router": "^1.158.4",
+    "@tanstack/react-start": "^1.159.0",
     "fastest-levenshtein": "^1.0.16",
     "openai": "^6.18.0",
     "pdf-parse": "^1.1.1",
@@ -32,15 +26,18 @@
     "react-dom": "^19.0.0",
     "react-pdf": "^10.2.0",
     "react-webcam": "^7.2.0",
-    "tailwindcss": "^4.0.14",
-    "vinxi": "^0.5.3",
-    "zod": "^3.23.8"
+    "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.1.18",
+    "@types/node": "^22.5.4",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
-    "@vitejs/plugin-react": "^4.3.4",
+    "@vitejs/plugin-react": "^4.6.0",
+    "nitro": "3.0.1-alpha.2",
+    "tailwindcss": "^4.1.18",
     "typescript": "^5.8.2",
+    "vite": "^7.3.1",
     "vite-tsconfig-paths": "^5.1.4"
   }
 }

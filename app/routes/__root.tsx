@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import type { ReactNode } from "react";
 import {
   Outlet,
@@ -24,16 +25,8 @@ export const Route = createRootRoute({
     ],
     links: [{ rel: "stylesheet", href: styles }],
   }),
-  component: RootComponent,
+  shellComponent: RootDocument,
 });
-
-function RootComponent() {
-  return (
-    <RootDocument>
-      <Outlet />
-    </RootDocument>
-  );
-}
 
 function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
   return (
