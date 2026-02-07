@@ -1,7 +1,7 @@
 import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
-import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
+import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { OpenAIEmbeddings } from "@langchain/openai";
-import { MemoryVectorStore } from "langchain/vectorstores/memory";
+import { MemoryVectorStore } from "@langchain/classic/vectorstores/memory";
 import { ChatOpenAI } from "@langchain/openai";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { StringOutputParser } from "@langchain/core/output_parsers";
@@ -50,19 +50,19 @@ export async function processLeaflet(pdfBase64: string) {
     const vectorStore = await MemoryVectorStore.fromDocuments(
       enhancedDocs,
       new OpenAIEmbeddings({
-        openAIApiKey: process.env.OPENAI_API_KEY,
-        modelName: "text-embedding-3-small", // Newer, better model (default is ada-002)
+        apiKey: process.env.OPENAI_API_KEY,
+        model: "text-embedding-3-small",
       })
     );
 
     // Create retriever with MMR for better diversity
     // MMR (Maximum Marginal Relevance) retrieves diverse but relevant documents
     const retriever = vectorStore.asRetriever({
-      searchType: "mmr", // Use MMR instead of similarity
+      searchType: "mmr",
+      k: 6,
       searchKwargs: {
-        k: 6, // Increased from 3 to 6 for more context
-        fetchK: 20, // Fetch 20 candidates, then pick 6 best with MMR
-        lambda: 0.5, // Balance between relevance (1.0) and diversity (0.0)
+        fetchK: 20,
+        lambda: 0.5,
       },
     });
 
@@ -82,7 +82,7 @@ export async function processLeaflet(pdfBase64: string) {
 export async function queryLeaflet(retriever: any, question: string) {
   try {
     // Get relevant documents using the retriever
-    const relevantDocs = await retriever.getRelevantDocuments(question);
+    const relevantDocs = await retriever.invoke(question);
 
     // Format context with page numbers for better citations
     const contextWithPages = relevantDocs
@@ -123,13 +123,13 @@ Páginas relevantes encontradas: {pages}
 Resposta:
     `);
 
-    // Use gpt-4o-mini - better quality, faster, and cheaper than gpt-4.1-nano
-    // gpt-4o-mini has 128k context window and better instruction following
+    // gpt-4o-mini: cheapest mini model ($0.15/$0.60 per 1M tokens)
+    // Consider gpt-5-mini for better performance when available
     const llm = new ChatOpenAI({
-      modelName: "gpt-4o-mini", // Updated from gpt-4.1-nano
-      temperature: 0.1, // Slightly increased for more natural language, but still mostly deterministic
-      openAIApiKey: process.env.OPENAI_API_KEY,
-      maxTokens: 1000, // Limit response length
+      model: "gpt-4o-mini",
+      temperature: 0.1,
+      apiKey: process.env.OPENAI_API_KEY,
+      maxTokens: 1000,
     });
 
     // Create a LangChain runnable sequence (modern pattern)

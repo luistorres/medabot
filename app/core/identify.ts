@@ -1,5 +1,6 @@
 import { openai } from "./llm";
 import { z } from "zod";
+import { zodResponseFormat } from "openai/helpers/zod";
 import { IDENTIFY_MEDICINE_PROMPT } from "./identify_prompt";
 
 const IdentifyMedicineSchema = z.object({
@@ -16,9 +17,11 @@ export const identifyMedicine = async (
 ): Promise<IdentifyMedicineResponse> => {
   const base64Image = image.split(",")[1];
 
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4.1-mini",
-    response_format: { type: "json_object" },
+  // gpt-4o-mini: cheapest mini model ($0.15/$0.60 per 1M tokens)
+  // Consider gpt-5-mini for better performance when available
+  const completion = await openai.chat.completions.parse({
+    model: "gpt-4o-mini",
+    response_format: zodResponseFormat(IdentifyMedicineSchema, "medicine"),
     messages: [
       {
         role: "system",
@@ -41,16 +44,11 @@ export const identifyMedicine = async (
     max_tokens: 300,
   });
 
-  if (!completion.choices[0].message.content) {
-    throw new Error("No content in response");
-  }
+  const parsed = completion.choices[0].message.parsed;
 
-  try {
-    const parsed = IdentifyMedicineSchema.parse(
-      JSON.parse(completion.choices[0].message.content)
-    );
-    return parsed;
-  } catch (error) {
+  if (!parsed) {
     throw new Error("Não foi possível identificar o medicamento");
   }
+
+  return parsed;
 };
