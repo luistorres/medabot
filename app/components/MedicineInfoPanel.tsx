@@ -119,37 +119,52 @@ const MedicineInfoPanel = ({
       <div className="mx-5 border-t border-gray-100" />
 
       {/* Actions */}
-      <div className="p-5 space-y-2.5 flex-1 flex flex-col">
+      <div className="p-5 pt-4 space-y-2.5 flex-1 flex flex-col">
         {pdfData && (
           <>
-            <Button variant="primary" fullWidth onClick={handleViewPdf} className="shadow-sm">
+            <Button variant="primary" fullWidth onClick={handleViewPdf} className="shadow-lg shadow-primary-600/25">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9z" />
               </svg>
               Ver folheto informativo
             </Button>
 
-            <Button variant="secondary" fullWidth onClick={onDownloadPdf}>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
-              </svg>
-              Transferir PDF
-            </Button>
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="secondary" fullWidth onClick={onDownloadPdf}>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                </svg>
+                Transferir PDF
+              </Button>
+              <Button
+                variant="ghost"
+                fullWidth
+                onClick={onReset}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182" />
+                </svg>
+                Nova pesquisa
+              </Button>
+            </div>
           </>
         )}
 
-        {/* Spacer pushes reset to bottom */}
-        <div className="flex-1" />
-
-        <button
-          onClick={onReset}
-          className="w-full flex items-center justify-center gap-2 min-h-[44px] text-[13px] text-gray-400 hover:text-gray-600 transition-colors"
-        >
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182" />
-          </svg>
-          Nova pesquisa
-        </button>
+        {!pdfData && (
+          <>
+            <div className="flex-1" />
+            <Button
+              variant="ghost"
+              fullWidth
+              onClick={onReset}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182" />
+              </svg>
+              Nova pesquisa
+            </Button>
+          </>
+        )}
       </div>
     </div>
   );
