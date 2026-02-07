@@ -1,11 +1,13 @@
 import { IdentifyMedicineResponse } from "../core/identify";
 import { usePDF } from "../context/PDFContext";
+import type { MedicineSummary } from "../server/extractMedicineSummary";
 import Button from "./ui/Button";
 
 interface MedicineInfoPanelProps {
   medicineInfo: IdentifyMedicineResponse;
   image: string | null;
   pdfData: string | null;
+  summary?: MedicineSummary | null;
   onReset: () => void;
   onDownloadPdf: () => void;
 }
@@ -14,6 +16,7 @@ const MedicineInfoPanel = ({
   medicineInfo,
   image,
   pdfData,
+  summary,
   onReset,
   onDownloadPdf,
 }: MedicineInfoPanelProps) => {
@@ -24,12 +27,16 @@ const MedicineInfoPanel = ({
     setActiveTab("pdf");
   };
 
+  const showBrandChip = medicineInfo.brand
+    && medicineInfo.brand !== medicineInfo.name
+    && medicineInfo.brand.toLowerCase() !== medicineInfo.name.toLowerCase();
+
   return (
     <div className="bg-white h-full flex flex-col">
       {/* Hero section — medicine identity */}
       <div className="p-5 pb-4">
         {/* Image + name group */}
-        <div className="flex items-start gap-3.5 mb-4">
+        <div className="flex items-start gap-3.5 mb-3">
           {image && (
             <img
               src={image}
@@ -41,13 +48,22 @@ const MedicineInfoPanel = ({
             <h2 className="text-lg font-700 text-gray-900 tracking-tight leading-tight">
               {medicineInfo.name}
             </h2>
-            {medicineInfo.brand && medicineInfo.brand !== medicineInfo.name && (
+            {showBrandChip && (
               <p className="text-[13px] text-gray-400 font-light mt-0.5">
                 {medicineInfo.brand}
               </p>
             )}
           </div>
         </div>
+
+        {/* Category badge */}
+        {summary?.category && (
+          <div className="mb-3">
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-primary-600 text-white text-[11px] font-semibold uppercase tracking-wide">
+              {summary.category}
+            </span>
+          </div>
+        )}
 
         {/* Key details as compact chips */}
         <div className="flex flex-wrap gap-2">
@@ -67,8 +83,37 @@ const MedicineInfoPanel = ({
               {medicineInfo.dosage}
             </span>
           )}
+          {showBrandChip && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-50 text-gray-600 text-xs font-medium ring-1 ring-gray-200">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6Z" />
+              </svg>
+              {medicineInfo.brand}
+            </span>
+          )}
         </div>
       </div>
+
+      {/* Indications — plain bullet points */}
+      {summary && summary.indications.length > 0 && (
+        <>
+          <div className="mx-5 border-t border-gray-100" />
+          <div className="p-5 pb-4">
+            <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-2.5">
+              Indicações terapêuticas
+            </p>
+            <ul className="space-y-1.5">
+              {summary.indications.map((indication, i) => (
+                <li key={i} className="flex items-start gap-2 text-[13px] text-gray-700 leading-snug">
+                  <span className="w-1 h-1 rounded-full bg-primary-400 mt-[7px] flex-shrink-0" />
+                  {indication}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </>
+      )}
 
       {/* Divider */}
       <div className="mx-5 border-t border-gray-100" />

@@ -14,6 +14,7 @@ import { fetchRegulatoryPdf } from "../server/fetchRegulatoryPdf";
 import { processLeafletPdf } from "../server/processLeaflet";
 import { queryLeafletPdf } from "../server/queryLeaflet";
 import { PDFProvider, usePDF } from "../context/PDFContext";
+import { extractMedicineSummary, type MedicineSummary } from "../server/extractMedicineSummary";
 import type { Candidate } from "./DisambiguationCard";
 
 type AppScreen = "landing" | "camera" | "search" | "manualForm" | "processing" | "results";
@@ -56,6 +57,7 @@ function AppContent() {
     dosage: "",
   });
   const [overview, setOverview] = useState<string>("");
+  const [medicineSummary, setMedicineSummary] = useState<MedicineSummary | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
   // Processing steps state
@@ -120,20 +122,25 @@ function AppContent() {
     markStepComplete("process");
   };
 
-  // Step: Generate overview
+  // Step: Generate overview + extract structured summary
   const runOverviewStep = async (pdfBase64: string) => {
     setCurrentStep("overview");
 
-    const overviewResult = await queryLeafletPdf({
-      data: {
-        pdfBase64: pdfBase64,
-        question: "What is this medicine used for? Provide a brief overview.",
-      },
-    });
+    // Run both queries in parallel
+    const [overviewResult, summaryResult] = await Promise.all([
+      queryLeafletPdf({
+        data: {
+          pdfBase64: pdfBase64,
+          question: "What is this medicine used for? Provide a brief overview.",
+        },
+      }),
+      extractMedicineSummary({ data: pdfBase64 }),
+    ]);
 
     if (overviewResult.success && typeof overviewResult.answer === "string") {
       setOverview(overviewResult.answer);
     }
+    setMedicineSummary(summaryResult);
     markStepComplete("overview");
   };
 
@@ -253,6 +260,7 @@ function AppContent() {
     setPdfData(null);
     setSavedPdfBase64(null);
     setOverview("");
+    setMedicineSummary(null);
     setCompletedSteps([]);
     setCurrentStep("");
     setProcessingError("");
@@ -374,6 +382,7 @@ function AppContent() {
           medicineInfo={medicineInfo}
           image={image}
           pdfData={pdfData}
+          summary={medicineSummary}
           onReset={handleReset}
           onDownloadPdf={downloadPdf}
         />
