@@ -64,7 +64,7 @@ const TabLayout = ({
 
         {/* Medicine Info Tab */}
         <div
-          className={`h-full overflow-y-auto ${activeTab === "medicine" ? "block" : "hidden"}`}
+          className={`h-full ${activeTab === "medicine" ? "block" : "hidden"}`}
         >
           {medicineInfoPanel}
         </div>
