@@ -130,88 +130,95 @@ const SearchScreen = ({ onSubmit, onCancel, onAdvancedSearch }: SearchScreenProp
               </div>
             </>
           ) : (
-            <div className="glass rounded-2xl ring-1 ring-gray-200/60 shadow-sm p-5 animate-fade-in">
-              <p className="text-[13px] text-gray-400 mb-3 font-light">Vamos procurar por:</p>
+            <div className="glass rounded-2xl ring-1 ring-gray-200/60 shadow-sm animate-fade-in">
+              {/* Medicine info / edit form */}
+              <div className="p-5 pb-4">
+                <p className="text-[11px] font-medium text-gray-300 uppercase tracking-widest mb-3">Vamos procurar por</p>
 
-              {editing ? (
-                <div className="space-y-3 mb-5">
-                  <div>
-                    <label className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Nome</label>
-                    <input
-                      value={parsed.name}
-                      onChange={(e) => handleEdit("name", e.target.value)}
-                      className="w-full mt-1.5 px-3.5 py-2.5 text-sm bg-white/60 border border-gray-200/80 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Substância ativa</label>
-                    <input
-                      value={parsed.activeSubstance}
-                      onChange={(e) => handleEdit("activeSubstance", e.target.value)}
-                      className="w-full mt-1.5 px-3.5 py-2.5 text-sm bg-white/60 border border-gray-200/80 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
+                {editing ? (
+                  <div className="space-y-3">
                     <div>
-                      <label className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Dosagem</label>
+                      <label className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Nome</label>
                       <input
-                        value={parsed.dosage}
-                        onChange={(e) => handleEdit("dosage", e.target.value)}
+                        value={parsed.name}
+                        onChange={(e) => handleEdit("name", e.target.value)}
                         className="w-full mt-1.5 px-3.5 py-2.5 text-sm bg-white/60 border border-gray-200/80 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all"
                       />
                     </div>
                     <div>
-                      <label className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Marca</label>
+                      <label className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Substância ativa</label>
                       <input
-                        value={parsed.brand}
-                        onChange={(e) => handleEdit("brand", e.target.value)}
+                        value={parsed.activeSubstance}
+                        onChange={(e) => handleEdit("activeSubstance", e.target.value)}
                         className="w-full mt-1.5 px-3.5 py-2.5 text-sm bg-white/60 border border-gray-200/80 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all"
                       />
                     </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Dosagem</label>
+                        <input
+                          value={parsed.dosage}
+                          onChange={(e) => handleEdit("dosage", e.target.value)}
+                          className="w-full mt-1.5 px-3.5 py-2.5 text-sm bg-white/60 border border-gray-200/80 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">Marca</label>
+                        <input
+                          value={parsed.brand}
+                          onChange={(e) => handleEdit("brand", e.target.value)}
+                          className="w-full mt-1.5 px-3.5 py-2.5 text-sm bg-white/60 border border-gray-200/80 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all"
+                        />
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <div className="mb-5">
-                  <p className="font-700 text-gray-900 text-lg tracking-tight">{parsed.name}</p>
-                  {parsed.activeSubstance && (
-                    <p className="text-sm text-gray-500 mt-0.5">{parsed.activeSubstance}</p>
-                  )}
-                  {(parsed.dosage || parsed.brand) && (
-                    <p className="text-[13px] text-gray-400 font-light">
-                      {[parsed.dosage, parsed.brand].filter(Boolean).join(" · ")}
-                    </p>
-                  )}
-                </div>
-              )}
+                ) : (
+                  <div>
+                    <p className="font-700 text-gray-900 text-lg tracking-tight">{parsed.name}</p>
+                    {parsed.activeSubstance && (
+                      <p className="text-sm text-gray-500 mt-0.5">{parsed.activeSubstance}</p>
+                    )}
+                    {(parsed.dosage || parsed.brand) && (
+                      <p className="text-[13px] text-gray-400 font-light">
+                        {[parsed.dosage, parsed.brand].filter(Boolean).join(" · ")}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
 
-              <div className="flex gap-2.5">
+              {/* Divider */}
+              <div className="border-t border-gray-200/60 mx-5" />
+
+              {/* Actions */}
+              <div className="p-4 pt-3.5 space-y-2.5">
                 <Button variant="primary" fullWidth onClick={handleConfirm} className="shadow-lg shadow-primary-600/25">
                   Procurar
                 </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    if (editing) {
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    variant="secondary"
+                    fullWidth
+                    onClick={() => setEditing(!editing)}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125" />
+                    </svg>
+                    {editing ? "OK" : "Editar"}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    fullWidth
+                    onClick={() => {
+                      setParsed(null);
+                      setQuery("");
                       setEditing(false);
-                    } else {
-                      setEditing(true);
-                    }
-                  }}
-                >
-                  {editing ? "OK" : "Editar"}
-                </Button>
+                    }}
+                  >
+                    Nova pesquisa
+                  </Button>
+                </div>
               </div>
-
-              <button
-                onClick={() => {
-                  setParsed(null);
-                  setQuery("");
-                  setEditing(false);
-                }}
-                className="w-full mt-3.5 text-[13px] text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                Nova pesquisa
-              </button>
             </div>
           )}
         </div>

@@ -27,7 +27,7 @@ export default defineConfig({
     nitro({
       // Keep server-only native packages out of the bundle
       rollupConfig: {
-        external: [/^playwright/, /^chromium-bidi/],
+        external: [/^playwright/, /^chromium-bidi/, /^pdf-parse/],
       },
     }),
   ],
