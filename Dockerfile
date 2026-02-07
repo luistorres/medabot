@@ -31,12 +31,13 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy package files and scripts folder (needed for postinstall)
+# Copy package files, .npmrc, and scripts folder (needed for postinstall)
 COPY package*.json ./
+COPY .npmrc ./
 COPY scripts ./scripts
 
 # Install all dependencies (including dev dependencies for build)
-RUN npm ci
+RUN npm ci --legacy-peer-deps
 
 # Copy source code
 COPY . .
