@@ -26,7 +26,9 @@ export default defineConfig({
     viteReact(),
     nitro({
       // Keep server-only native packages out of the bundle
-      externals: ["playwright", "playwright-core"],
+      rollupConfig: {
+        external: [/^playwright/, /^chromium-bidi/],
+      },
     }),
   ],
   publicDir: "public",
