@@ -117,7 +117,7 @@ const SearchScreen = ({ onSubmit, onCancel, onAdvancedSearch }: SearchScreenProp
               <div className="mt-10 space-y-3 animate-stagger-in stagger-4 md:text-center">
                 <p className="text-[11px] font-medium text-gray-300 uppercase tracking-widest">Exemplos de pesquisa</p>
                 <div className="flex flex-wrap gap-2 md:justify-center">
-                  {["Paracetamol 500mg", "Ben-u-ron 1mg", "Ibuprofeno 600mg"].map((hint) => (
+                  {["Ben-u-ron 1mg", "Brufen 600mg"].map((hint) => (
                     <button
                       key={hint}
                       onClick={() => setQuery(hint)}
