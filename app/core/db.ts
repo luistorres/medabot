@@ -28,10 +28,16 @@ export function getDb(): Database.Database {
       )
     `);
 
-    // Add dosage column if missing (migration for existing DBs)
+    // Add columns if missing (migration for existing DBs)
     const cols = db.prepare("PRAGMA table_info(pdf_cache)").all() as { name: string }[];
     if (!cols.some((c) => c.name === "dosage")) {
       db.exec(`ALTER TABLE pdf_cache ADD COLUMN dosage TEXT NOT NULL DEFAULT ''`);
+    }
+    if (!cols.some((c) => c.name === "pharmaceutical_form")) {
+      db.exec(`ALTER TABLE pdf_cache ADD COLUMN pharmaceutical_form TEXT NOT NULL DEFAULT ''`);
+    }
+    if (!cols.some((c) => c.name === "titular")) {
+      db.exec(`ALTER TABLE pdf_cache ADD COLUMN titular TEXT NOT NULL DEFAULT ''`);
     }
 
     // Drop legacy search_cache — replaced by local medicines DB
@@ -88,13 +94,15 @@ export interface CachedPdf {
   medicineName: string;
   activeSubstance: string;
   dosage: string;
+  pharmaceuticalForm: string;
+  titular: string;
   confidence: number;
 }
 
 export function getCachedPdf(nameKey: string): CachedPdf | null {
   const row = getDb()
     .prepare(
-      `SELECT rcm_pdf, fi_pdf, medicine_name, active_substance, dosage, confidence
+      `SELECT rcm_pdf, fi_pdf, medicine_name, active_substance, dosage, pharmaceutical_form, titular, confidence
        FROM pdf_cache
        WHERE name_key = ? AND created_at > unixepoch() - 2592000`
     )
@@ -105,6 +113,8 @@ export function getCachedPdf(nameKey: string): CachedPdf | null {
         medicine_name: string;
         active_substance: string;
         dosage: string;
+        pharmaceutical_form: string;
+        titular: string;
         confidence: number;
       }
     | undefined;
@@ -116,6 +126,8 @@ export function getCachedPdf(nameKey: string): CachedPdf | null {
     medicineName: row.medicine_name,
     activeSubstance: row.active_substance,
     dosage: row.dosage,
+    pharmaceuticalForm: row.pharmaceutical_form,
+    titular: row.titular,
     confidence: row.confidence,
   };
 }
@@ -123,14 +135,16 @@ export function getCachedPdf(nameKey: string): CachedPdf | null {
 export function setCachedPdf(nameKey: string, data: CachedPdf): void {
   getDb()
     .prepare(
-      `INSERT INTO pdf_cache (name_key, rcm_pdf, fi_pdf, medicine_name, active_substance, dosage, confidence)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO pdf_cache (name_key, rcm_pdf, fi_pdf, medicine_name, active_substance, dosage, pharmaceutical_form, titular, confidence)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(name_key) DO UPDATE SET
          rcm_pdf = excluded.rcm_pdf,
          fi_pdf = excluded.fi_pdf,
          medicine_name = excluded.medicine_name,
          active_substance = excluded.active_substance,
          dosage = excluded.dosage,
+         pharmaceutical_form = excluded.pharmaceutical_form,
+         titular = excluded.titular,
          confidence = excluded.confidence,
          created_at = unixepoch()`
     )
@@ -141,6 +155,8 @@ export function setCachedPdf(nameKey: string, data: CachedPdf): void {
       data.medicineName,
       data.activeSubstance,
       data.dosage,
+      data.pharmaceuticalForm,
+      data.titular,
       data.confidence
     );
 }

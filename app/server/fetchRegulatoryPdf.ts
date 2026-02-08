@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { regulatoryPDF, SearchCandidate, MedicineSearchInput } from "../core/regulatoryPdf";
+import { regulatoryPDF, MedicineSearchInput } from "../core/regulatoryPdf";
 
 type FetchRegulatoryPdfInput = MedicineSearchInput & { forceRefresh?: boolean };
 
@@ -27,6 +27,7 @@ export const fetchRegulatoryPdf = createServerFn({
         fi: result.fi ? result.fi.toString("base64") : null,
         contentType: "application/pdf",
         confidence: result.confidence,
+        matchedMedicine: result.matchedMedicine,
       };
     }
 

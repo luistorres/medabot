@@ -106,6 +106,19 @@ function AppContent() {
       throw new Error("Não foi possível encontrar o folheto informativo deste medicamento.");
     }
 
+    // Enrich medicineInfo with matched medicine data from INFARMED
+    if (pdfResponse.matchedMedicine) {
+      const m = pdfResponse.matchedMedicine;
+      setMedicineInfo((prev) => ({
+        ...prev,
+        name: m.name || prev.name,
+        activeSubstance: m.activeSubstance || prev.activeSubstance,
+        dosage: m.dosage || prev.dosage,
+        pharmaceuticalForm: m.pharmaceuticalForm,
+        titular: m.titular,
+      }));
+    }
+
     setPdfData(pdfResponse.data);
     setSavedPdfBase64(pdfResponse.data);
     setSearchMessage("");
@@ -255,15 +268,24 @@ function AppContent() {
   // Handle disambiguation selection
   const handleDisambiguationSelect = async (candidate: Candidate) => {
     setDisambiguation(null);
-    // Keep original medicineInfo (for the same search), pass candidate to target the exact row
-    await processMedicineInfo(medicineInfo, undefined, undefined, candidate);
+    // Enrich medicineInfo with the selected candidate's full data
+    const enrichedInfo: IdentifyMedicineResponse = {
+      ...medicineInfo,
+      name: candidate.name,
+      activeSubstance: candidate.activeSubstance,
+      dosage: candidate.dosage || medicineInfo.dosage,
+      pharmaceuticalForm: candidate.pharmaceuticalForm,
+      titular: candidate.titular,
+    };
+    setMedicineInfo(enrichedInfo);
+    await processMedicineInfo(enrichedInfo, undefined, undefined, candidate);
   };
 
   // Reset to landing
   const handleReset = () => {
     setCurrentScreen("landing");
     setImage(null);
-    setMedicineInfo({ name: "", activeSubstance: "", brand: "", dosage: "" });
+    setMedicineInfo({ name: "", activeSubstance: "", brand: "", dosage: "", pharmaceuticalForm: undefined, titular: undefined });
     setPdfData(null);
     setCurrentPage(1);
     setTotalPages(0);

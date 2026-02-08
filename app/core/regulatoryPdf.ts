@@ -229,11 +229,20 @@ async function performSearch(
   }
 }
 
+export interface MatchedMedicineInfo {
+  pharmaceuticalForm?: string;
+  dosage?: string;
+  titular?: string;
+  activeSubstance?: string;
+  name?: string;
+}
+
 export interface RegulatoryPDFResult {
   rcm: Buffer | null;
   fi: Buffer | null;
   candidates?: SearchCandidate[];
   confidence: number;
+  matchedMedicine?: MatchedMedicineInfo;
 }
 
 // Build search strategies dynamically based on available input fields.
@@ -309,6 +318,13 @@ export async function regulatoryPDF(
       rcm: cached.rcmPdf,
       fi: cached.fiPdf,
       confidence: cached.confidence,
+      matchedMedicine: {
+        name: cached.medicineName,
+        activeSubstance: cached.activeSubstance,
+        dosage: cached.dosage || undefined,
+        pharmaceuticalForm: cached.pharmaceuticalForm || undefined,
+        titular: cached.titular || undefined,
+      },
     };
   }
 
@@ -547,6 +563,8 @@ export async function regulatoryPDF(
         medicineName: bestMatch.name,
         activeSubstance: bestMatch.activeSubstance,
         dosage: bestMatch.dosage || "",
+        pharmaceuticalForm: bestMatch.pharmaceuticalForm || "",
+        titular: bestMatch.titular || "",
         confidence: bestMatch.similarity,
       };
       setCachedPdf(cacheKey, cacheEntry);
@@ -559,6 +577,13 @@ export async function regulatoryPDF(
       rcm: isPdf ? pdfBuffer : null,
       fi: null,
       confidence: bestMatch.similarity,
+      matchedMedicine: {
+        name: bestMatch.name,
+        activeSubstance: bestMatch.activeSubstance,
+        pharmaceuticalForm: bestMatch.pharmaceuticalForm || undefined,
+        dosage: bestMatch.dosage || undefined,
+        titular: bestMatch.titular || undefined,
+      },
     };
   } catch (error) {
     console.error("Error fetching regulatory documents:", error);

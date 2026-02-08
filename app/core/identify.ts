@@ -10,7 +10,10 @@ const IdentifyMedicineSchema = z.object({
   dosage: z.string(),
 });
 
-export type IdentifyMedicineResponse = z.infer<typeof IdentifyMedicineSchema>;
+export type IdentifyMedicineResponse = z.infer<typeof IdentifyMedicineSchema> & {
+  pharmaceuticalForm?: string;
+  titular?: string;
+};
 
 export const identifyMedicine = async (
   image: string
