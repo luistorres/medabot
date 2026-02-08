@@ -9,6 +9,9 @@ export interface MedicineSearchInput {
   brand?: string;
 }
 
+// In-memory cache: normalized medicine name → GUID for instant repeat lookups
+const guidCache = new Map<string, { guid: string; name: string; activeSubstance: string }>();
+
 // String similarity function using fastest-levenshtein for fuzzy matching
 function stringSimilarity(str1: string, str2: string): number {
   const s1 = str1.toLowerCase().trim();
@@ -34,6 +37,7 @@ interface SearchResult {
   similarity: number;
   nameSimilarity: number;
   substanceSimilarity: number;
+  guid?: string;
 }
 
 // Extract and validate search results from the table
@@ -107,6 +111,24 @@ async function extractSearchResults(
             ? nameSimilarity * 0.7 + substanceSimilarity * 0.3
             : nameSimilarity;
 
+          // Try to extract med_guid from links in this row
+          let guid: string | undefined;
+          try {
+            const links = await rows[i].$$("a[href]");
+            for (const link of links) {
+              const href = await link.getAttribute("href");
+              if (href) {
+                const match = href.match(/med_guid=([^&]+)/);
+                if (match) {
+                  guid = match[1];
+                  break;
+                }
+              }
+            }
+          } catch {
+            // GUID extraction is best-effort
+          }
+
           results.push({
             name,
             activeSubstance: activeSubstance || "(unknown)",
@@ -114,6 +136,7 @@ async function extractSearchResults(
             similarity: combinedSimilarity,
             nameSimilarity,
             substanceSimilarity,
+            guid,
           });
           console.log(
             `Result ${i}: "${name}" | Active: "${activeSubstance || "N/A"}" ` +
@@ -223,6 +246,54 @@ export interface RegulatoryPDFResult {
   confidence: number;
 }
 
+// Download a PDF directly using the med_guid and document type (FI or RCM).
+// Uses the browser context's request API to maintain session cookies without
+// opening a page or triggering route interception.
+async function downloadPdfByGuid(
+  context: BrowserContext,
+  guid: string,
+  type: "FI" | "RCM"
+): Promise<Buffer | null> {
+  try {
+    const url = `https://extranet.infarmed.pt/INFOMED-fo/download-ficheiro.xhtml?med_guid=${encodeURIComponent(guid)}&tipo_doc=${type}`;
+    console.log(`Direct download ${type}: ${url}`);
+
+    const response = await context.request.get(url, { timeout: 15000 });
+
+    const contentType = response.headers()["content-type"] || "";
+    if (
+      response.ok() &&
+      (contentType.includes("application/pdf") || contentType.includes("application/octet-stream"))
+    ) {
+      const body = await response.body();
+      console.log(`✓ ${type} downloaded: ${body.length} bytes`);
+      return Buffer.from(body);
+    }
+
+    console.warn(`Direct ${type} download: status ${response.status()}, content-type: ${contentType}`);
+    return null;
+  } catch (error) {
+    console.warn(`Direct ${type} download failed:`, error);
+    return null;
+  }
+}
+
+// Try downloading both RCM and FI using a known GUID
+async function tryDirectDownload(
+  context: BrowserContext,
+  guid: string
+): Promise<{ rcm: Buffer | null; fi: Buffer | null } | null> {
+  const [rcm, fi] = await Promise.all([
+    downloadPdfByGuid(context, guid, "RCM"),
+    downloadPdfByGuid(context, guid, "FI"),
+  ]);
+
+  if (rcm) {
+    return { rcm, fi };
+  }
+  return null;
+}
+
 // Build search strategies dynamically based on available input fields.
 // Only creates strategies that use fields we actually have, so we don't
 // waste time searching with empty values.
@@ -273,78 +344,39 @@ export async function regulatoryPDF(
     devtools: false,
   });
   const context = await browser.newContext();
-
-  // Create a promise that resolves when PDF is captured
-  let resolvePdfPromise: (buffer: Buffer | null) => void;
-
-  const pdfPromise = new Promise<Buffer | null>((resolve) => {
-    resolvePdfPromise = resolve;
-
-    // Set a timeout in case PDF is never found
-    setTimeout(() => {
-      console.log("PDF download timeout after 30 seconds");
-      resolve(null);
-    }, 30000);
-  });
-
-  // Set up network interception to capture PDF responses
-  await context.route("**/*", async (route) => {
-    try {
-      const request = route.request();
-      const response = await route.fetch();
-      const headers = response.headers();
-
-      // Check if this is a PDF response
-      if (
-        headers["content-type"]?.includes("application/pdf") ||
-        headers["content-disposition"]?.includes(".pdf")
-      ) {
-        console.log("PDF response intercepted!", request.url());
-        const pdfBuffer = Buffer.from(await response.body());
-
-        // Resolve the promise with the PDF buffer
-        resolvePdfPromise(pdfBuffer);
-      }
-
-      // Continue the request normally
-      await route.fulfill({ response });
-    } catch (error: any) {
-      // Ignore errors from routes after browser/context is closed
-      if (
-        error.message?.includes(
-          "Target page, context or browser has been closed"
-        )
-      ) {
-        console.log("Route handler called after browser closed, ignoring...");
-        return;
-      }
-      throw error;
-    }
-  });
-
   const page = await context.newPage();
 
   try {
+    const cacheKey = medicineInfo.name.toLowerCase().trim();
+
+    // === Phase 1: Check GUID cache for instant download ===
+    const cached = guidCache.get(cacheKey);
+    if (cached) {
+      console.log(`Cache hit for "${medicineInfo.name}" → GUID: ${cached.guid}`);
+      const directResult = await tryDirectDownload(context, cached.guid);
+      if (directResult) {
+        return { ...directResult, confidence: 1.0 };
+      }
+      guidCache.delete(cacheKey);
+      console.warn("Cached GUID download failed, proceeding with search");
+    }
+
+    // === Phase 2: Search INFARMED (no route interception — faster) ===
     console.log(
       `Starting PDF search for: ${medicineInfo.name}` +
       (medicineInfo.activeSubstance ? ` (${medicineInfo.activeSubstance})` : "") +
       (medicineInfo.dosage ? ` [${medicineInfo.dosage}]` : "")
     );
 
-    // Build strategies dynamically based on available input fields
     const searchStrategies = buildSearchStrategies(medicineInfo);
-
     let searchResults: SearchResult[] = [];
-    let successfulStrategy: SearchAttempt | null = null;
 
-    // Try each strategy until we get results
     for (let i = 0; i < searchStrategies.length; i++) {
       console.log(`\n=== Attempt ${i + 1}/${searchStrategies.length} ===`);
 
       const success = await performSearch(page, searchStrategies[i]);
 
       if (success) {
-        // Extract and validate results
         searchResults = await extractSearchResults(
           page,
           medicineInfo.name,
@@ -352,7 +384,6 @@ export async function regulatoryPDF(
         );
 
         if (searchResults.length > 0) {
-          successfulStrategy = searchStrategies[i];
           console.log(
             `✓ Strategy ${i + 1} succeeded with ${searchResults.length} result(s)`
           );
@@ -365,20 +396,14 @@ export async function regulatoryPDF(
       }
     }
 
-    // Check if we found any results
     if (searchResults.length === 0) {
       console.error(
         "All search strategies failed - no results found for:",
         medicineInfo.name
       );
-      return {
-        rcm: null,
-        fi: null,
-        confidence: 0,
-      };
+      return { rcm: null, fi: null, confidence: 0 };
     }
 
-    // Select the best match
     const bestMatch = searchResults[0];
     console.log(
       `\nBest match: "${bestMatch.name}" | Active: "${bestMatch.activeSubstance}"\n` +
@@ -386,53 +411,6 @@ export async function regulatoryPDF(
       `  Substance similarity: ${bestMatch.substanceSimilarity.toFixed(2)}\n` +
       `  Combined score: ${bestMatch.similarity.toFixed(2)}`
     );
-
-    // Return candidates for disambiguation when confidence is low
-    if (bestMatch.similarity < 0.7) {
-      const candidates: SearchCandidate[] = searchResults.slice(0, 3).map((r) => ({
-        name: r.name,
-        activeSubstance: r.activeSubstance,
-        similarity: r.similarity,
-      }));
-
-      console.warn(
-        `⚠ Low confidence match (${bestMatch.similarity.toFixed(2)}) - returning candidates for disambiguation`
-      );
-
-      // Still proceed with best match but include candidates
-      // Client can decide whether to show disambiguation
-    }
-
-    // Click the RCM link for the best matching result
-    console.log(
-      `Clicking RCM link for result at index ${bestMatch.rowIndex}...`
-    );
-
-    // Build the selector for the specific row
-    const rcmSelector = `table[summary="Tabela de resultados"] tbody tr:nth-child(${bestMatch.rowIndex + 1}) a[id$="pesqAvancadaDatableRcmIcon"]`;
-
-    // Start the click and wait for PDF
-    const clickPromise = page.click(rcmSelector);
-
-    // Wait for either the PDF to be captured or timeout
-    console.log("Waiting for PDF to be intercepted...");
-    const [pdfBuffer] = await Promise.all([
-      pdfPromise,
-      clickPromise.catch(() => {
-        console.log("Click completed or failed, but continuing...");
-      }),
-    ]);
-
-    console.log(
-      "PDF interception completed, buffer size:",
-      pdfBuffer?.length || 0
-    );
-
-    if (pdfBuffer) {
-      console.log("✓ Successfully retrieved PDF");
-    } else {
-      console.error("✗ Failed to retrieve PDF - timeout or network error");
-    }
 
     const candidates: SearchCandidate[] | undefined =
       bestMatch.similarity < 0.7
@@ -442,6 +420,85 @@ export async function regulatoryPDF(
             similarity: r.similarity,
           }))
         : undefined;
+
+    if (bestMatch.similarity < 0.7 && candidates) {
+      console.warn(
+        `⚠ Low confidence match (${bestMatch.similarity.toFixed(2)}) - returning candidates for disambiguation`
+      );
+    }
+
+    // === Phase 3: Try direct download via GUID (extracted from search results) ===
+    if (bestMatch.guid) {
+      console.log(`GUID found in search results: ${bestMatch.guid} — trying direct download`);
+      const directResult = await tryDirectDownload(context, bestMatch.guid);
+      if (directResult) {
+        guidCache.set(cacheKey, {
+          guid: bestMatch.guid,
+          name: bestMatch.name,
+          activeSubstance: bestMatch.activeSubstance,
+        });
+        return { ...directResult, candidates, confidence: bestMatch.similarity };
+      }
+      console.warn("Direct download with extracted GUID failed");
+    }
+
+    // === Phase 4: Fallback — click RCM link and intercept PDF response ===
+    console.log("Falling back to click-and-intercept for PDF download");
+
+    let resolvePdfPromise: (buffer: Buffer | null) => void;
+    const pdfPromise = new Promise<Buffer | null>((resolve) => {
+      resolvePdfPromise = resolve;
+      setTimeout(() => {
+        console.log("PDF download timeout after 30 seconds");
+        resolve(null);
+      }, 30000);
+    });
+
+    // Set up route interception only now (not during search phase)
+    await context.route("**/*", async (route) => {
+      try {
+        const request = route.request();
+        const response = await route.fetch();
+        const headers = response.headers();
+
+        if (
+          headers["content-type"]?.includes("application/pdf") ||
+          headers["content-disposition"]?.includes(".pdf")
+        ) {
+          console.log("PDF response intercepted!", request.url());
+          const pdfBuffer = Buffer.from(await response.body());
+          resolvePdfPromise(pdfBuffer);
+        }
+
+        await route.fulfill({ response });
+      } catch (error: any) {
+        if (
+          error.message?.includes(
+            "Target page, context or browser has been closed"
+          )
+        ) {
+          return;
+        }
+        throw error;
+      }
+    });
+
+    const rcmSelector = `table[summary="Tabela de resultados"] tbody tr:nth-child(${bestMatch.rowIndex + 1}) a[id$="pesqAvancadaDatableRcmIcon"]`;
+    const clickPromise = page.click(rcmSelector);
+
+    console.log("Waiting for PDF to be intercepted...");
+    const [pdfBuffer] = await Promise.all([
+      pdfPromise,
+      clickPromise.catch(() => {
+        console.log("Click completed or failed, but continuing...");
+      }),
+    ]);
+
+    if (pdfBuffer) {
+      console.log("✓ Successfully retrieved PDF via interception");
+    } else {
+      console.error("✗ Failed to retrieve PDF - timeout or network error");
+    }
 
     return {
       rcm: pdfBuffer,
@@ -458,7 +515,6 @@ export async function regulatoryPDF(
     };
   } finally {
     try {
-      // Clean up route handlers before closing
       await page.unrouteAll({ behavior: "ignoreErrors" });
       await context.close();
     } catch (cleanupError: any) {
