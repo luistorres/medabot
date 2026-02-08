@@ -1,6 +1,6 @@
 import { chromium, Page, BrowserContext } from "playwright";
 import { distance } from "fastest-levenshtein";
-import * as fs from "node:fs";
+import { getCachedGuid, setCachedGuid, deleteCachedGuid } from "./db";
 
 export interface MedicineSearchInput {
   name: string;
@@ -8,9 +8,6 @@ export interface MedicineSearchInput {
   dosage?: string;
   brand?: string;
 }
-
-// In-memory cache: normalized medicine name → GUID for instant repeat lookups
-const guidCache = new Map<string, { guid: string; name: string; activeSubstance: string }>();
 
 // String similarity function using fastest-levenshtein for fuzzy matching
 function stringSimilarity(str1: string, str2: string): number {
@@ -349,15 +346,15 @@ export async function regulatoryPDF(
   try {
     const cacheKey = medicineInfo.name.toLowerCase().trim();
 
-    // === Phase 1: Check GUID cache for instant download ===
-    const cached = guidCache.get(cacheKey);
+    // === Phase 1: Check SQLite GUID cache for instant download ===
+    const cached = getCachedGuid(cacheKey);
     if (cached) {
       console.log(`Cache hit for "${medicineInfo.name}" → GUID: ${cached.guid}`);
       const directResult = await tryDirectDownload(context, cached.guid);
       if (directResult) {
         return { ...directResult, confidence: 1.0 };
       }
-      guidCache.delete(cacheKey);
+      deleteCachedGuid(cacheKey);
       console.warn("Cached GUID download failed, proceeding with search");
     }
 
@@ -432,7 +429,7 @@ export async function regulatoryPDF(
       console.log(`GUID found in search results: ${bestMatch.guid} — trying direct download`);
       const directResult = await tryDirectDownload(context, bestMatch.guid);
       if (directResult) {
-        guidCache.set(cacheKey, {
+        setCachedGuid(cacheKey, {
           guid: bestMatch.guid,
           name: bestMatch.name,
           activeSubstance: bestMatch.activeSubstance,

@@ -17,6 +17,7 @@
   "dependencies": {
     "@tanstack/react-router": "^1.158.4",
     "@tanstack/react-start": "^1.159.0",
+    "better-sqlite3": "^12.6.2",
     "fastest-levenshtein": "^1.0.16",
     "openai": "^6.18.0",
     "pdf-parse": "^1.1.1",
@@ -30,6 +31,7 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.18",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.5.4",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
