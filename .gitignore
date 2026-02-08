@@ -1,6 +1,5 @@
 **/build
-**/public
-!public/logo.png
+public/pdf.worker.min.mjs
 pnpm-lock.yaml
 node_modules
 dist
