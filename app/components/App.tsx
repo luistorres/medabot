@@ -87,7 +87,7 @@ function AppContent() {
   };
 
   // Step: Fetch PDF
-  const runFetchStep = async (info: IdentifyMedicineResponse) => {
+  const runFetchStep = async (info: IdentifyMedicineResponse): Promise<{ pdfBase64: string; needsDisambiguation: boolean }> => {
     setCurrentStep("fetch");
     setSearchMessage(`A procurar o folheto de '${info.name}'...`);
 
@@ -97,8 +97,8 @@ function AppContent() {
       throw new Error("Não foi possível encontrar o folheto informativo deste medicamento.");
     }
 
-    // Check for disambiguation
-    if (pdfResponse.candidates && pdfResponse.candidates.length > 0 && pdfResponse.confidence < 0.7) {
+    const needsDisambiguation = !!(pdfResponse.candidates && pdfResponse.candidates.length > 0 && pdfResponse.confidence < 0.7);
+    if (needsDisambiguation && pdfResponse.candidates) {
       setDisambiguation(pdfResponse.candidates);
     }
 
@@ -106,7 +106,7 @@ function AppContent() {
     setSavedPdfBase64(pdfResponse.data);
     setSearchMessage("");
     markStepComplete("fetch");
-    return pdfResponse.data;
+    return { pdfBase64: pdfResponse.data, needsDisambiguation };
   };
 
   // Step: Process PDF
@@ -166,7 +166,14 @@ function AppContent() {
       // Step: Fetch PDF
       let pdfBase64 = savedPdfBase64;
       if (!startFromStep || startFromStep === "fetch") {
-        pdfBase64 = await runFetchStep(info);
+        const fetchResult = await runFetchStep(info);
+        pdfBase64 = fetchResult.pdfBase64;
+
+        // Pause pipeline — let the user pick the correct candidate
+        if (fetchResult.needsDisambiguation) {
+          setLoading(false);
+          return;
+        }
       }
 
       if (!pdfBase64) {
