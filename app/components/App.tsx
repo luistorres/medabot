@@ -87,11 +87,11 @@ function AppContent() {
   };
 
   // Step: Fetch PDF
-  const runFetchStep = async (info: IdentifyMedicineResponse): Promise<{ pdfBase64: string; needsDisambiguation: boolean }> => {
+  const runFetchStep = async (info: IdentifyMedicineResponse, forceRefresh?: boolean): Promise<{ pdfBase64: string; needsDisambiguation: boolean }> => {
     setCurrentStep("fetch");
     setSearchMessage(`A procurar o folheto de '${info.name}'...`);
 
-    const pdfResponse = await fetchRegulatoryPdf({ data: info });
+    const pdfResponse = await fetchRegulatoryPdf({ data: { ...info, forceRefresh } });
 
     if (!pdfResponse || !pdfResponse.data) {
       throw new Error("Não foi possível encontrar o folheto informativo deste medicamento.");
@@ -145,7 +145,7 @@ function AppContent() {
   };
 
   // Process medicine info (per-step error handling)
-  const processMedicineInfo = async (info: IdentifyMedicineResponse, startFromStep?: string) => {
+  const processMedicineInfo = async (info: IdentifyMedicineResponse, startFromStep?: string, forceRefresh?: boolean) => {
     setMedicineInfo(info);
     setCurrentScreen("processing");
     setLoading(true);
@@ -166,7 +166,7 @@ function AppContent() {
       // Step: Fetch PDF
       let pdfBase64 = savedPdfBase64;
       if (!startFromStep || startFromStep === "fetch") {
-        const fetchResult = await runFetchStep(info);
+        const fetchResult = await runFetchStep(info, forceRefresh);
         pdfBase64 = fetchResult.pdfBase64;
 
         // Pause pipeline — let the user pick the correct candidate
@@ -274,6 +274,11 @@ function AppContent() {
     setFailedStep("");
     setDisambiguation(null);
     setSearchMessage("");
+  };
+
+  // Force refresh — re-fetch leaflet from INFARMED, bypassing cache
+  const handleForceRefresh = async () => {
+    await processMedicineInfo(medicineInfo, undefined, true);
   };
 
   // Download PDF
@@ -392,6 +397,7 @@ function AppContent() {
           summary={medicineSummary}
           onReset={handleReset}
           onDownloadPdf={downloadPdf}
+          onForceRefresh={handleForceRefresh}
         />
       }
       chat={

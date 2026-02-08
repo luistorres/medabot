@@ -1,6 +1,6 @@
 import { chromium, Page } from "playwright";
 import { distance } from "fastest-levenshtein";
-import { getCachedPdf, setCachedPdf } from "./db";
+import { getCachedPdf, setCachedPdf, deleteCachedPdf } from "./db";
 
 export interface MedicineSearchInput {
   name: string;
@@ -268,13 +268,20 @@ function buildSearchStrategies(input: MedicineSearchInput): SearchAttempt[] {
 }
 
 export async function regulatoryPDF(
-  medicineInfo: MedicineSearchInput
+  medicineInfo: MedicineSearchInput,
+  forceRefresh?: boolean
 ): Promise<RegulatoryPDFResult> {
   const normalizedName = medicineInfo.name.toLowerCase().trim();
   const normalizedDosage = medicineInfo.dosage?.toLowerCase().trim();
   const cacheKey = normalizedDosage
     ? `${normalizedName}|${normalizedDosage}`
     : normalizedName;
+
+  // If force-refreshing, delete the cached entry so we re-fetch from INFARMED
+  if (forceRefresh) {
+    console.log(`Force refresh requested — deleting cache for "${medicineInfo.name}"`);
+    deleteCachedPdf(cacheKey);
+  }
 
   // === Phase 1: Check PDF cache — skip Playwright entirely on hit ===
   const cached = getCachedPdf(cacheKey);
