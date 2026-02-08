@@ -353,17 +353,17 @@ export async function regulatoryPDF(
     );
 
     const candidates: SearchCandidate[] | undefined =
-      bestMatch.similarity < 0.7
-        ? searchResults.slice(0, 3).map((r) => ({
+      searchResults.length > 1
+        ? searchResults.slice(0, 5).map((r) => ({
             name: r.name,
             activeSubstance: r.activeSubstance,
             similarity: r.similarity,
           }))
         : undefined;
 
-    if (bestMatch.similarity < 0.7 && candidates) {
-      console.warn(
-        `⚠ Low confidence match (${bestMatch.similarity.toFixed(2)}) - returning candidates for disambiguation`
+    if (candidates) {
+      console.log(
+        `Multiple results (${searchResults.length}) — returning candidates for user disambiguation`
       );
     }
 
@@ -422,16 +422,26 @@ export async function regulatoryPDF(
     if (pdfBuffer) {
       console.log("✓ Successfully retrieved PDF via interception");
 
-      // Cache the PDF bytes for future use
-      setCachedPdf(cacheKey, {
+      // Cache under the actual medicine name (full INFARMED name)
+      const resultKey = normalizedDosage
+        ? `${bestMatch.name.toLowerCase().trim()}|${normalizedDosage}`
+        : bestMatch.name.toLowerCase().trim();
+      const cacheEntry = {
         rcmPdf: pdfBuffer,
         fiPdf: null,
         medicineName: bestMatch.name,
         activeSubstance: bestMatch.activeSubstance,
         dosage: normalizedDosage || "",
         confidence: bestMatch.similarity,
-      });
-      console.log(`Cached PDF for future use: "${medicineInfo.name}" (${pdfBuffer.length} bytes)`);
+      };
+      setCachedPdf(resultKey, cacheEntry);
+      console.log(`Cached PDF under "${resultKey}" (${pdfBuffer.length} bytes)`);
+
+      // Also cache under the search input when there's no ambiguity (single result)
+      if (!candidates && resultKey !== cacheKey) {
+        setCachedPdf(cacheKey, cacheEntry);
+        console.log(`Also cached under search input "${cacheKey}"`);
+      }
     } else {
       console.error("✗ Failed to retrieve PDF - timeout or network error");
     }

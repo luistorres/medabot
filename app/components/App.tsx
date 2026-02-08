@@ -97,7 +97,7 @@ function AppContent() {
       throw new Error("Não foi possível encontrar o folheto informativo deste medicamento.");
     }
 
-    const needsDisambiguation = !!(pdfResponse.candidates && pdfResponse.candidates.length > 0 && pdfResponse.confidence < 0.7);
+    const needsDisambiguation = !!(pdfResponse.candidates && pdfResponse.candidates.length > 0);
     if (needsDisambiguation && pdfResponse.candidates) {
       setDisambiguation(pdfResponse.candidates);
     }
