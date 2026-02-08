@@ -12,7 +12,9 @@
     "build": "npm run copy-pdf-worker && vite build",
     "start": "node .output/server/index.mjs",
     "copy-pdf-worker": "node scripts/copy-pdf-worker.js",
-    "postinstall": "npm run copy-pdf-worker"
+    "postinstall": "npm run copy-pdf-worker",
+    "test:e2e": "tsx scripts/e2e-test.ts",
+    "test:smoke": "tsx scripts/e2e-test.ts --smoke"
   },
   "dependencies": {
     "@tanstack/react-router": "^1.158.4",

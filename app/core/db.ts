@@ -33,8 +33,17 @@ function getDb(): Database.Database {
       db.exec(`ALTER TABLE pdf_cache ADD COLUMN dosage TEXT NOT NULL DEFAULT ''`);
     }
 
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS search_cache (
+        search_key   TEXT PRIMARY KEY,
+        results_json TEXT NOT NULL,
+        created_at   INTEGER NOT NULL DEFAULT (unixepoch())
+      )
+    `);
+
     // Clean expired entries (older than 30 days)
     db.exec(`DELETE FROM pdf_cache WHERE created_at <= unixepoch() - 2592000`);
+    db.exec(`DELETE FROM search_cache WHERE created_at <= unixepoch() - 2592000`);
   }
   return db;
 }
@@ -106,4 +115,45 @@ export function deleteCachedPdf(nameKey: string): void {
   getDb()
     .prepare("DELETE FROM pdf_cache WHERE name_key = ?")
     .run(nameKey);
+}
+
+// --- Search results cache ---
+
+export interface CachedSearchCandidate {
+  name: string;
+  activeSubstance: string;
+  similarity: number;
+  pharmaceuticalForm?: string;
+  dosage?: string;
+  titular?: string;
+}
+
+export function getCachedSearch(searchKey: string): CachedSearchCandidate[] | null {
+  const row = getDb()
+    .prepare(
+      `SELECT results_json FROM search_cache
+       WHERE search_key = ? AND created_at > unixepoch() - 2592000`
+    )
+    .get(searchKey) as { results_json: string } | undefined;
+
+  if (!row) return null;
+  return JSON.parse(row.results_json) as CachedSearchCandidate[];
+}
+
+export function setCachedSearch(searchKey: string, results: CachedSearchCandidate[]): void {
+  getDb()
+    .prepare(
+      `INSERT INTO search_cache (search_key, results_json)
+       VALUES (?, ?)
+       ON CONFLICT(search_key) DO UPDATE SET
+         results_json = excluded.results_json,
+         created_at = unixepoch()`
+    )
+    .run(searchKey, JSON.stringify(results));
+}
+
+export function deleteCachedSearch(searchKey: string): void {
+  getDb()
+    .prepare("DELETE FROM search_cache WHERE search_key = ?")
+    .run(searchKey);
 }

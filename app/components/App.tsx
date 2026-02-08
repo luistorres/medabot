@@ -87,26 +87,30 @@ function AppContent() {
   };
 
   // Step: Fetch PDF
-  const runFetchStep = async (info: IdentifyMedicineResponse, forceRefresh?: boolean): Promise<{ pdfBase64: string; needsDisambiguation: boolean }> => {
+  const runFetchStep = async (info: IdentifyMedicineResponse, forceRefresh?: boolean, selectedCandidate?: Candidate): Promise<{ pdfBase64: string; needsDisambiguation: boolean }> => {
     setCurrentStep("fetch");
     setSearchMessage(`A procurar o folheto de '${info.name}'...`);
 
-    const pdfResponse = await fetchRegulatoryPdf({ data: { ...info, forceRefresh } });
+    const pdfResponse = await fetchRegulatoryPdf({ data: { ...info, forceRefresh, selectedCandidate } });
+
+    // Check for disambiguation first (may have no PDF yet)
+    const needsDisambiguation = !!(pdfResponse?.candidates && pdfResponse.candidates.length > 0);
+    if (needsDisambiguation && pdfResponse.candidates) {
+      setDisambiguation(pdfResponse.candidates);
+      setSearchMessage("");
+      markStepComplete("fetch");
+      return { pdfBase64: "", needsDisambiguation: true };
+    }
 
     if (!pdfResponse || !pdfResponse.data) {
       throw new Error("Não foi possível encontrar o folheto informativo deste medicamento.");
-    }
-
-    const needsDisambiguation = !!(pdfResponse.candidates && pdfResponse.candidates.length > 0);
-    if (needsDisambiguation && pdfResponse.candidates) {
-      setDisambiguation(pdfResponse.candidates);
     }
 
     setPdfData(pdfResponse.data);
     setSavedPdfBase64(pdfResponse.data);
     setSearchMessage("");
     markStepComplete("fetch");
-    return { pdfBase64: pdfResponse.data, needsDisambiguation };
+    return { pdfBase64: pdfResponse.data, needsDisambiguation: false };
   };
 
   // Step: Process PDF
@@ -145,7 +149,7 @@ function AppContent() {
   };
 
   // Process medicine info (per-step error handling)
-  const processMedicineInfo = async (info: IdentifyMedicineResponse, startFromStep?: string, forceRefresh?: boolean) => {
+  const processMedicineInfo = async (info: IdentifyMedicineResponse, startFromStep?: string, forceRefresh?: boolean, selectedCandidate?: Candidate) => {
     setMedicineInfo(info);
     setCurrentScreen("processing");
     setLoading(true);
@@ -166,7 +170,7 @@ function AppContent() {
       // Step: Fetch PDF
       let pdfBase64 = savedPdfBase64;
       if (!startFromStep || startFromStep === "fetch") {
-        const fetchResult = await runFetchStep(info, forceRefresh);
+        const fetchResult = await runFetchStep(info, forceRefresh, selectedCandidate);
         pdfBase64 = fetchResult.pdfBase64;
 
         // Pause pipeline — let the user pick the correct candidate
@@ -251,12 +255,8 @@ function AppContent() {
   // Handle disambiguation selection
   const handleDisambiguationSelect = async (candidate: Candidate) => {
     setDisambiguation(null);
-    const updatedInfo: IdentifyMedicineResponse = {
-      ...medicineInfo,
-      name: candidate.name,
-      activeSubstance: candidate.activeSubstance,
-    };
-    await processMedicineInfo(updatedInfo);
+    // Keep original medicineInfo (for the same INFARMED search), pass candidate to target the exact row
+    await processMedicineInfo(medicineInfo, undefined, undefined, candidate);
   };
 
   // Reset to landing

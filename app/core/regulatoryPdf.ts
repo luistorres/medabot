@@ -1,12 +1,22 @@
 import { chromium, Page } from "playwright";
 import { distance } from "fastest-levenshtein";
-import { getCachedPdf, setCachedPdf, deleteCachedPdf } from "./db";
+import { getCachedPdf, setCachedPdf, deleteCachedPdf, getCachedSearch, setCachedSearch, deleteCachedSearch } from "./db";
+
+export interface SearchCandidate {
+  name: string;
+  activeSubstance: string;
+  similarity: number;
+  pharmaceuticalForm?: string;
+  dosage?: string;
+  titular?: string;
+}
 
 export interface MedicineSearchInput {
   name: string;
   activeSubstance?: string;
   dosage?: string;
   brand?: string;
+  selectedCandidate?: SearchCandidate;
 }
 
 // String similarity function using fastest-levenshtein for fuzzy matching
@@ -30,6 +40,9 @@ function stringSimilarity(str1: string, str2: string): number {
 interface SearchResult {
   name: string;
   activeSubstance: string;
+  pharmaceuticalForm: string;
+  dosage: string;
+  titular: string;
   rowIndex: number;
   similarity: number;
   nameSimilarity: number;
@@ -70,22 +83,21 @@ async function extractSearchResults(
           console.log(`Table columns (row 0):`, allCellTexts);
         }
 
-        // Extract medicine name (column 1) and active substance (column 2)
-        // Column 0 is typically a hidden ID, so we skip pure numbers
-        let name = "";
-        let activeSubstance = "";
-
-        for (const text of allCellTexts) {
-          // Skip empty cells, pure numbers, and very short text
-          if (text && text.length > 3 && !/^\d+$/.test(text)) {
-            if (!name) {
-              name = text; // First text column = medicine name
-            } else if (!activeSubstance) {
-              activeSubstance = text; // Second text column = active substance
-              break;
-            }
+        // INFARMED table columns: [ID, Name, Active Substance, Pharma Form, Dosage, Titular, Comercialização, ?, Documents]
+        // Find first non-numeric column as start of meaningful data
+        let dataStart = 0;
+        for (let c = 0; c < allCellTexts.length; c++) {
+          if (allCellTexts[c] && !/^\d+$/.test(allCellTexts[c])) {
+            dataStart = c;
+            break;
           }
         }
+
+        const name = allCellTexts[dataStart]?.trim() || "";
+        const activeSubstance = allCellTexts[dataStart + 1]?.trim() || "";
+        const pharmaceuticalForm = allCellTexts[dataStart + 2]?.trim() || "";
+        const dosage = allCellTexts[dataStart + 3]?.trim() || "";
+        const titular = allCellTexts[dataStart + 4]?.trim() || "";
 
         // Skip "no results" messages in Portuguese
         const isNoResultsMessage =
@@ -108,13 +120,16 @@ async function extractSearchResults(
           results.push({
             name,
             activeSubstance: activeSubstance || "(unknown)",
+            pharmaceuticalForm,
+            dosage,
+            titular,
             rowIndex: i,
             similarity: combinedSimilarity,
             nameSimilarity,
             substanceSimilarity,
           });
           console.log(
-            `Result ${i}: "${name}" | Active: "${activeSubstance || "N/A"}" ` +
+            `Result ${i}: "${name}" | Active: "${activeSubstance || "N/A"}" | Form: "${pharmaceuticalForm}" | Dosage: "${dosage}" | Titular: "${titular}" ` +
             `(name: ${nameSimilarity.toFixed(2)}, substance: ${substanceSimilarity.toFixed(2)}, ` +
             `combined: ${combinedSimilarity.toFixed(2)})`
           );
@@ -212,12 +227,6 @@ async function performSearch(
   }
 }
 
-export interface SearchCandidate {
-  name: string;
-  activeSubstance: string;
-  similarity: number;
-}
-
 export interface RegulatoryPDFResult {
   rcm: Buffer | null;
   fi: Buffer | null;
@@ -271,27 +280,54 @@ export async function regulatoryPDF(
   medicineInfo: MedicineSearchInput,
   forceRefresh?: boolean
 ): Promise<RegulatoryPDFResult> {
+  const { selectedCandidate } = medicineInfo;
   const normalizedName = medicineInfo.name.toLowerCase().trim();
   const normalizedDosage = medicineInfo.dosage?.toLowerCase().trim();
-  const cacheKey = normalizedDosage
+
+  // Build cache key: candidate-specific when user already picked, otherwise search-based
+  const cacheKey = selectedCandidate
+    ? [selectedCandidate.name, selectedCandidate.dosage || "", selectedCandidate.pharmaceuticalForm || ""]
+        .map((s) => s.toLowerCase().trim())
+        .join("|")
+    : normalizedDosage
+      ? `${normalizedName}|${normalizedDosage}`
+      : normalizedName;
+
+  // Search cache key is always based on the original search input (not the candidate)
+  const searchCacheKey = normalizedDosage
     ? `${normalizedName}|${normalizedDosage}`
     : normalizedName;
 
-  // If force-refreshing, delete the cached entry so we re-fetch from INFARMED
+  // If force-refreshing, delete cached entries so we re-fetch from INFARMED
   if (forceRefresh) {
     console.log(`Force refresh requested — deleting cache for "${medicineInfo.name}"`);
     deleteCachedPdf(cacheKey);
+    deleteCachedSearch(searchCacheKey);
   }
 
   // === Phase 1: Check PDF cache — skip Playwright entirely on hit ===
   const cached = getCachedPdf(cacheKey);
   if (cached) {
-    console.log(`Cache hit for "${medicineInfo.name}" — returning cached PDF (${cached.rcmPdf?.length ?? 0} bytes)`);
+    console.log(`Cache hit for "${cacheKey}" — returning cached PDF (${cached.rcmPdf?.length ?? 0} bytes)`);
     return {
       rcm: cached.rcmPdf,
       fi: cached.fiPdf,
       confidence: cached.confidence,
     };
+  }
+
+  // === Phase 1.5: Check search results cache (only for original searches, not candidate downloads) ===
+  if (!selectedCandidate) {
+    const cachedResults = getCachedSearch(searchCacheKey);
+    if (cachedResults) {
+      if (cachedResults.length > 1) {
+        // Multiple results cached — return candidates for disambiguation (no Playwright)
+        console.log(`Search cache hit for "${searchCacheKey}" — ${cachedResults.length} candidates`);
+        return { rcm: null, fi: null, candidates: cachedResults, confidence: 0 };
+      }
+      // Single cached result — skip to PDF download below
+      console.log(`Search cache hit for "${searchCacheKey}" — single result, will download PDF`);
+    }
   }
 
   // === Phase 2: Launch browser and search INFARMED ===
@@ -302,14 +338,16 @@ export async function regulatoryPDF(
   const page = await context.newPage();
 
   try {
+    let searchResults: SearchResult[] = [];
+
     console.log(
       `Starting PDF search for: ${medicineInfo.name}` +
       (medicineInfo.activeSubstance ? ` (${medicineInfo.activeSubstance})` : "") +
-      (medicineInfo.dosage ? ` [${medicineInfo.dosage}]` : "")
+      (medicineInfo.dosage ? ` [${medicineInfo.dosage}]` : "") +
+      (selectedCandidate ? ` [targeting: ${selectedCandidate.name} / ${selectedCandidate.dosage} / ${selectedCandidate.pharmaceuticalForm}]` : "")
     );
 
     const searchStrategies = buildSearchStrategies(medicineInfo);
-    let searchResults: SearchResult[] = [];
 
     for (let i = 0; i < searchStrategies.length; i++) {
       console.log(`\n=== Attempt ${i + 1}/${searchStrategies.length} ===`);
@@ -344,27 +382,59 @@ export async function regulatoryPDF(
       return { rcm: null, fi: null, confidence: 0 };
     }
 
-    const bestMatch = searchResults[0];
-    console.log(
-      `\nBest match: "${bestMatch.name}" | Active: "${bestMatch.activeSubstance}"\n` +
-      `  Name similarity: ${bestMatch.nameSimilarity.toFixed(2)}\n` +
-      `  Substance similarity: ${bestMatch.substanceSimilarity.toFixed(2)}\n` +
-      `  Combined score: ${bestMatch.similarity.toFixed(2)}`
-    );
+    // --- Pick the target row ---
+    let bestMatch: SearchResult;
 
-    const candidates: SearchCandidate[] | undefined =
-      searchResults.length > 1
-        ? searchResults.slice(0, 5).map((r) => ({
-            name: r.name,
-            activeSubstance: r.activeSubstance,
-            similarity: r.similarity,
-          }))
-        : undefined;
-
-    if (candidates) {
-      console.log(
-        `Multiple results (${searchResults.length}) — returning candidates for user disambiguation`
+    if (selectedCandidate) {
+      // User already picked — find the exact row matching all fields
+      const norm = (s?: string) => (s || "").toLowerCase().trim();
+      const match = searchResults.find(
+        (r) =>
+          norm(r.name) === norm(selectedCandidate.name) &&
+          norm(r.dosage) === norm(selectedCandidate.dosage) &&
+          norm(r.pharmaceuticalForm) === norm(selectedCandidate.pharmaceuticalForm)
       );
+      if (!match) {
+        console.error(
+          `Could not find selected candidate in INFARMED results: ` +
+          `"${selectedCandidate.name}" / "${selectedCandidate.dosage}" / "${selectedCandidate.pharmaceuticalForm}"`
+        );
+        return { rcm: null, fi: null, confidence: 0 };
+      }
+      bestMatch = match;
+      console.log(
+        `\nMatched selected candidate at row ${bestMatch.rowIndex}: "${bestMatch.name}" | ` +
+        `Form: "${bestMatch.pharmaceuticalForm}" | Dosage: "${bestMatch.dosage}"`
+      );
+    } else {
+      bestMatch = searchResults[0];
+      console.log(
+        `\nBest match: "${bestMatch.name}" | Active: "${bestMatch.activeSubstance}"\n` +
+        `  Name similarity: ${bestMatch.nameSimilarity.toFixed(2)}\n` +
+        `  Substance similarity: ${bestMatch.substanceSimilarity.toFixed(2)}\n` +
+        `  Combined score: ${bestMatch.similarity.toFixed(2)}`
+      );
+
+      // Cache search results for future lookups
+      const candidatesForCache = searchResults.map((r) => ({
+        name: r.name,
+        activeSubstance: r.activeSubstance,
+        similarity: r.similarity,
+        pharmaceuticalForm: r.pharmaceuticalForm || undefined,
+        dosage: r.dosage || undefined,
+        titular: r.titular || undefined,
+      }));
+      setCachedSearch(searchCacheKey, candidatesForCache);
+      console.log(`Cached ${candidatesForCache.length} search result(s) under "${searchCacheKey}"`);
+
+      // Multiple results — return candidates for disambiguation, skip PDF download
+      if (searchResults.length > 1) {
+        const candidates = candidatesForCache;
+        console.log(
+          `Multiple results (${searchResults.length}) — returning candidates for user disambiguation`
+        );
+        return { rcm: null, fi: null, candidates, confidence: bestMatch.similarity };
+      }
     }
 
     // === Phase 3: Click RCM link and intercept PDF response ===
@@ -386,13 +456,20 @@ export async function regulatoryPDF(
         const response = await route.fetch();
         const headers = response.headers();
 
-        if (
-          headers["content-type"]?.includes("application/pdf") ||
-          headers["content-disposition"]?.includes(".pdf")
-        ) {
-          console.log("PDF response intercepted!", request.url());
-          const pdfBuffer = Buffer.from(await response.body());
-          resolvePdfPromise(pdfBuffer);
+        const contentType = headers["content-type"] || "";
+        const contentDisposition = headers["content-disposition"] || "";
+        const isDocument =
+          contentType.includes("application/pdf") ||
+          contentType.includes("application/msword") ||
+          contentType.includes("application/vnd.openxmlformats") ||
+          contentType.includes("application/octet-stream") ||
+          contentDisposition.includes(".pdf") ||
+          contentDisposition.includes(".doc");
+
+        if (isDocument) {
+          console.log(`Document intercepted! Content-Type: ${contentType}, URL: ${request.url()}`);
+          const docBuffer = Buffer.from(await response.body());
+          resolvePdfPromise(docBuffer);
         }
 
         await route.fulfill({ response });
@@ -419,37 +496,34 @@ export async function regulatoryPDF(
       }),
     ]);
 
-    if (pdfBuffer) {
+    // Validate that the intercepted document is actually a PDF (starts with %PDF)
+    const isPdf = pdfBuffer && pdfBuffer.length > 4 && pdfBuffer.subarray(0, 5).toString("ascii").startsWith("%PDF");
+
+    if (pdfBuffer && !isPdf) {
+      console.error(`✗ Intercepted document is not a PDF (header: "${pdfBuffer.subarray(0, 20).toString("ascii")}") — skipping`);
+    }
+
+    if (isPdf) {
       console.log("✓ Successfully retrieved PDF via interception");
 
-      // Cache under the actual medicine name (full INFARMED name)
-      const resultKey = normalizedDosage
-        ? `${bestMatch.name.toLowerCase().trim()}|${normalizedDosage}`
-        : bestMatch.name.toLowerCase().trim();
+      // Cache under the candidate-specific key (name|dosage|form)
       const cacheEntry = {
         rcmPdf: pdfBuffer,
         fiPdf: null,
         medicineName: bestMatch.name,
         activeSubstance: bestMatch.activeSubstance,
-        dosage: normalizedDosage || "",
+        dosage: bestMatch.dosage || "",
         confidence: bestMatch.similarity,
       };
-      setCachedPdf(resultKey, cacheEntry);
-      console.log(`Cached PDF under "${resultKey}" (${pdfBuffer.length} bytes)`);
-
-      // Also cache under the search input when there's no ambiguity (single result)
-      if (!candidates && resultKey !== cacheKey) {
-        setCachedPdf(cacheKey, cacheEntry);
-        console.log(`Also cached under search input "${cacheKey}"`);
-      }
+      setCachedPdf(cacheKey, cacheEntry);
+      console.log(`Cached PDF under "${cacheKey}" (${pdfBuffer.length} bytes)`);
     } else {
       console.error("✗ Failed to retrieve PDF - timeout or network error");
     }
 
     return {
-      rcm: pdfBuffer,
+      rcm: isPdf ? pdfBuffer : null,
       fi: null,
-      candidates,
       confidence: bestMatch.similarity,
     };
   } catch (error) {
