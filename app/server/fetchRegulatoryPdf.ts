@@ -1,11 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
-import { regulatoryPDF, SearchCandidate } from "../core/regulatoryPdf";
-import { IdentifyMedicineResponse } from "../core/identify";
+import { regulatoryPDF, SearchCandidate, MedicineSearchInput } from "../core/regulatoryPdf";
 
 export const fetchRegulatoryPdf = createServerFn({
   method: "POST",
 })
-  .inputValidator((medicineInfo: IdentifyMedicineResponse) => medicineInfo)
+  .inputValidator((medicineInfo: MedicineSearchInput) => medicineInfo)
   .handler(async ({ data }) => {
     const result = await regulatoryPDF(data);
 

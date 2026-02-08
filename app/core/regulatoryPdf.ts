@@ -1,7 +1,13 @@
 import { chromium, Page, BrowserContext } from "playwright";
-import { IdentifyMedicineResponse } from "./identify";
 import { distance } from "fastest-levenshtein";
 import * as fs from "node:fs";
+
+export interface MedicineSearchInput {
+  name: string;
+  activeSubstance?: string;
+  dosage?: string;
+  brand?: string;
+}
 
 // String similarity function using fastest-levenshtein for fuzzy matching
 function stringSimilarity(str1: string, str2: string): number {
@@ -34,7 +40,7 @@ interface SearchResult {
 async function extractSearchResults(
   page: Page,
   expectedName: string,
-  expectedActiveSubstance: string
+  expectedActiveSubstance?: string
 ): Promise<SearchResult[]> {
   try {
     const results: SearchResult[] = [];
@@ -92,13 +98,14 @@ async function extractSearchResults(
         if (name && !isNoResultsMessage) {
           // Calculate similarity for both name and active substance
           const nameSimilarity = stringSimilarity(name, expectedName);
-          const substanceSimilarity = activeSubstance
+          const substanceSimilarity = activeSubstance && expectedActiveSubstance
             ? stringSimilarity(activeSubstance, expectedActiveSubstance)
             : 0;
 
-          // Weighted combined similarity: 70% name, 30% active substance
-          const combinedSimilarity =
-            nameSimilarity * 0.7 + substanceSimilarity * 0.3;
+          // Weighted combined similarity: adjust weights based on available info
+          const combinedSimilarity = expectedActiveSubstance
+            ? nameSimilarity * 0.7 + substanceSimilarity * 0.3
+            : nameSimilarity;
 
           results.push({
             name,
@@ -216,8 +223,50 @@ export interface RegulatoryPDFResult {
   confidence: number;
 }
 
+// Build search strategies dynamically based on available input fields.
+// Only creates strategies that use fields we actually have, so we don't
+// waste time searching with empty values.
+function buildSearchStrategies(input: MedicineSearchInput): SearchAttempt[] {
+  const strategies: SearchAttempt[] = [];
+  const hasSubstance = !!input.activeSubstance;
+  const hasDosage = !!input.dosage;
+
+  // Most specific first: all available fields
+  if (hasSubstance && hasDosage) {
+    strategies.push({
+      name: input.name,
+      activeSubstance: input.activeSubstance,
+      dosage: input.dosage,
+    });
+  }
+
+  // Name + active substance
+  if (hasSubstance) {
+    strategies.push({
+      name: input.name,
+      activeSubstance: input.activeSubstance,
+    });
+  }
+
+  // Name only (always try this)
+  strategies.push({ name: input.name });
+
+  // Try first word of name as fallback (e.g. "Paracetamol" from "Paracetamol Ratiopharm 500mg")
+  const firstWord = input.name.split(/[\s,]+/)[0];
+  if (firstWord && firstWord.toLowerCase() !== input.name.toLowerCase() && firstWord.length > 2) {
+    strategies.push({ name: firstWord });
+  }
+
+  // Active substance only as last resort
+  if (hasSubstance) {
+    strategies.push({ activeSubstance: input.activeSubstance });
+  }
+
+  return strategies;
+}
+
 export async function regulatoryPDF(
-  medicineInfo: IdentifyMedicineResponse
+  medicineInfo: MedicineSearchInput
 ): Promise<RegulatoryPDFResult> {
   const browser = await chromium.launch({
     headless: true,
@@ -277,31 +326,13 @@ export async function regulatoryPDF(
 
   try {
     console.log(
-      `Starting PDF search for: ${medicineInfo.name} (${medicineInfo.activeSubstance}, ${medicineInfo.dosage})`
+      `Starting PDF search for: ${medicineInfo.name}` +
+      (medicineInfo.activeSubstance ? ` (${medicineInfo.activeSubstance})` : "") +
+      (medicineInfo.dosage ? ` [${medicineInfo.dosage}]` : "")
     );
 
-    // Define 4-tier progressive fallback strategy
-    const searchStrategies: SearchAttempt[] = [
-      {
-        // Try 1: All fields (most specific)
-        name: medicineInfo.name,
-        activeSubstance: medicineInfo.activeSubstance,
-        dosage: medicineInfo.dosage,
-      },
-      {
-        // Try 2: Name + active substance (handles different dosages)
-        name: medicineInfo.name,
-        activeSubstance: medicineInfo.activeSubstance,
-      },
-      {
-        // Try 3: Name only (handles variations in formulation)
-        name: medicineInfo.name,
-      },
-      {
-        // Try 4: Active substance only (broadest search)
-        activeSubstance: medicineInfo.activeSubstance,
-      },
-    ];
+    // Build strategies dynamically based on available input fields
+    const searchStrategies = buildSearchStrategies(medicineInfo);
 
     let searchResults: SearchResult[] = [];
     let successfulStrategy: SearchAttempt | null = null;
@@ -314,12 +345,10 @@ export async function regulatoryPDF(
 
       if (success) {
         // Extract and validate results
-        const expectedName = medicineInfo.name;
-        const expectedActiveSubstance = medicineInfo.activeSubstance;
         searchResults = await extractSearchResults(
           page,
-          expectedName,
-          expectedActiveSubstance
+          medicineInfo.name,
+          medicineInfo.activeSubstance || undefined
         );
 
         if (searchResults.length > 0) {
