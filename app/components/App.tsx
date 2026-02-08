@@ -68,7 +68,7 @@ function AppContent() {
   const [searchMessage, setSearchMessage] = useState<string>("");
   const [disambiguation, setDisambiguation] = useState<Candidate[] | null>(null);
 
-  const { pdfData, setPdfData } = usePDF();
+  const { pdfData, setPdfData, setCurrentPage, setTotalPages } = usePDF();
 
   // Saved intermediate results for retry
   const [savedPdfBase64, setSavedPdfBase64] = useState<string | null>(null);
@@ -265,6 +265,8 @@ function AppContent() {
     setImage(null);
     setMedicineInfo({ name: "", activeSubstance: "", brand: "", dosage: "" });
     setPdfData(null);
+    setCurrentPage(1);
+    setTotalPages(0);
     setSavedPdfBase64(null);
     setOverview("");
     setMedicineSummary(null);
