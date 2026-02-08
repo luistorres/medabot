@@ -10,10 +10,10 @@ export default defineConfig({
     port: 3000,
   },
   optimizeDeps: {
-    exclude: ["playwright", "playwright-core"],
+    exclude: ["playwright", "playwright-core", "better-sqlite3"],
   },
   ssr: {
-    external: ["playwright", "playwright-core"],
+    external: ["playwright", "playwright-core", "better-sqlite3"],
   },
   plugins: [
     tailwindcss(),
@@ -27,7 +27,7 @@ export default defineConfig({
     nitro({
       // Keep server-only native packages out of the bundle
       rollupConfig: {
-        external: [/^playwright/, /^chromium-bidi/, /^pdf-parse/],
+        external: [/^playwright/, /^chromium-bidi/, /^pdf-parse/, /^better-sqlite3/],
       },
     }),
   ],
