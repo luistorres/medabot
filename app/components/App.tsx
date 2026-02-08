@@ -389,6 +389,7 @@ function AppContent() {
   // Results
   return (
     <ResponsiveContainer
+      onReset={handleReset}
       medicineInfoPanel={
         <MedicineInfoPanel
           medicineInfo={medicineInfo}
