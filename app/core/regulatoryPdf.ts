@@ -177,9 +177,13 @@ async function performSearch(
     // Navigate back to the search page for each attempt
     await page.goto(
       "https://extranet.infarmed.pt/INFOMED-fo/pesquisa-avancada.xhtml",
-      { waitUntil: "networkidle" }
+      { waitUntil: "domcontentloaded" }
     );
-    
+
+    // Wait for the form to be ready before filling fields
+    await page.waitForSelector('input[title$="Nome do Medicamento"]', {
+      timeout: 15000,
+    });
 
     // Fill the form fields (clear fields not in attempt by filling with empty string)
     await page.fill(
