@@ -4,12 +4,17 @@
 #
 
 app = 'medabot'
-primary_region = 'mad'
+primary_region = 'cdg'
 
 [build]
 
+[mounts]
+  source = "medabot_data"
+  destination = "/data"
+
 [env]
   NODE_ENV = 'production'
+  DB_PATH = '/data/medabot.db'
 
 [http_service]
   internal_port = 3000
