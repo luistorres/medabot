@@ -13,3 +13,5 @@ debug-rcm.pdf
 .vinxi
 .output
 *.db
+*.db-shm
+*.db-wal

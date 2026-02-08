@@ -43,7 +43,7 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
 
   const { jumpToPage } = usePDF();
   const { showScrollButton, isAtBottom, scrollToBottom } = useScrollToBottom(
-    messagesContainerRef,
+    messagesContainerRef as React.RefObject<HTMLDivElement>,
     { threshold: 150 }
   );
 

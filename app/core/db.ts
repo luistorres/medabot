@@ -10,50 +10,100 @@ function getDb(): Database.Database {
   if (!db) {
     db = new Database(DB_PATH);
     db.pragma("journal_mode = WAL");
+
+    // Drop the old dead-code table if it exists
+    db.exec(`DROP TABLE IF EXISTS medicine_cache`);
+
     db.exec(`
-      CREATE TABLE IF NOT EXISTS medicine_cache (
-        name_key    TEXT PRIMARY KEY,
-        med_guid    TEXT NOT NULL,
-        name        TEXT NOT NULL,
+      CREATE TABLE IF NOT EXISTS pdf_cache (
+        name_key         TEXT PRIMARY KEY,
+        rcm_pdf          BLOB,
+        fi_pdf           BLOB,
+        medicine_name    TEXT NOT NULL,
         active_substance TEXT NOT NULL DEFAULT '',
-        created_at  INTEGER NOT NULL DEFAULT (unixepoch())
+        dosage           TEXT NOT NULL DEFAULT '',
+        confidence       REAL NOT NULL DEFAULT 0,
+        created_at       INTEGER NOT NULL DEFAULT (unixepoch())
       )
     `);
+
+    // Add dosage column if missing (migration for existing DBs)
+    const cols = db.prepare("PRAGMA table_info(pdf_cache)").all() as { name: string }[];
+    if (!cols.some((c) => c.name === "dosage")) {
+      db.exec(`ALTER TABLE pdf_cache ADD COLUMN dosage TEXT NOT NULL DEFAULT ''`);
+    }
+
+    // Clean expired entries (older than 30 days)
+    db.exec(`DELETE FROM pdf_cache WHERE created_at <= unixepoch() - 2592000`);
   }
   return db;
 }
 
-export interface CachedMedicine {
-  guid: string;
-  name: string;
+export interface CachedPdf {
+  rcmPdf: Buffer | null;
+  fiPdf: Buffer | null;
+  medicineName: string;
   activeSubstance: string;
+  dosage: string;
+  confidence: number;
 }
 
-export function getCachedGuid(nameKey: string): CachedMedicine | null {
+export function getCachedPdf(nameKey: string): CachedPdf | null {
   const row = getDb()
-    .prepare("SELECT med_guid, name, active_substance FROM medicine_cache WHERE name_key = ?")
-    .get(nameKey) as { med_guid: string; name: string; active_substance: string } | undefined;
+    .prepare(
+      `SELECT rcm_pdf, fi_pdf, medicine_name, active_substance, dosage, confidence
+       FROM pdf_cache
+       WHERE name_key = ? AND created_at > unixepoch() - 2592000`
+    )
+    .get(nameKey) as
+    | {
+        rcm_pdf: Buffer | null;
+        fi_pdf: Buffer | null;
+        medicine_name: string;
+        active_substance: string;
+        dosage: string;
+        confidence: number;
+      }
+    | undefined;
 
   if (!row) return null;
-  return { guid: row.med_guid, name: row.name, activeSubstance: row.active_substance };
+  return {
+    rcmPdf: row.rcm_pdf ? Buffer.from(row.rcm_pdf) : null,
+    fiPdf: row.fi_pdf ? Buffer.from(row.fi_pdf) : null,
+    medicineName: row.medicine_name,
+    activeSubstance: row.active_substance,
+    dosage: row.dosage,
+    confidence: row.confidence,
+  };
 }
 
-export function setCachedGuid(nameKey: string, data: CachedMedicine): void {
+export function setCachedPdf(nameKey: string, data: CachedPdf): void {
   getDb()
     .prepare(
-      `INSERT INTO medicine_cache (name_key, med_guid, name, active_substance)
-       VALUES (?, ?, ?, ?)
+      `INSERT INTO pdf_cache (name_key, rcm_pdf, fi_pdf, medicine_name, active_substance, dosage, confidence)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(name_key) DO UPDATE SET
-         med_guid = excluded.med_guid,
-         name = excluded.name,
+         rcm_pdf = excluded.rcm_pdf,
+         fi_pdf = excluded.fi_pdf,
+         medicine_name = excluded.medicine_name,
          active_substance = excluded.active_substance,
+         dosage = excluded.dosage,
+         confidence = excluded.confidence,
          created_at = unixepoch()`
     )
-    .run(nameKey, data.guid, data.name, data.activeSubstance);
+    .run(
+      nameKey,
+      data.rcmPdf,
+      data.fiPdf,
+      data.medicineName,
+      data.activeSubstance,
+      data.dosage,
+      data.confidence
+    );
 }
 
-export function deleteCachedGuid(nameKey: string): void {
+export function deleteCachedPdf(nameKey: string): void {
   getDb()
-    .prepare("DELETE FROM medicine_cache WHERE name_key = ?")
+    .prepare("DELETE FROM pdf_cache WHERE name_key = ?")
     .run(nameKey);
 }

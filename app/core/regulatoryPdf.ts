@@ -1,6 +1,6 @@
-import { chromium, Page, BrowserContext } from "playwright";
+import { chromium, Page } from "playwright";
 import { distance } from "fastest-levenshtein";
-import { getCachedGuid, setCachedGuid, deleteCachedGuid } from "./db";
+import { getCachedPdf, setCachedPdf } from "./db";
 
 export interface MedicineSearchInput {
   name: string;
@@ -34,7 +34,6 @@ interface SearchResult {
   similarity: number;
   nameSimilarity: number;
   substanceSimilarity: number;
-  guid?: string;
 }
 
 // Extract and validate search results from the table
@@ -75,7 +74,6 @@ async function extractSearchResults(
         // Column 0 is typically a hidden ID, so we skip pure numbers
         let name = "";
         let activeSubstance = "";
-        let columnIndex = 0;
 
         for (const text of allCellTexts) {
           // Skip empty cells, pure numbers, and very short text
@@ -87,7 +85,6 @@ async function extractSearchResults(
               break;
             }
           }
-          columnIndex++;
         }
 
         // Skip "no results" messages in Portuguese
@@ -108,24 +105,6 @@ async function extractSearchResults(
             ? nameSimilarity * 0.7 + substanceSimilarity * 0.3
             : nameSimilarity;
 
-          // Try to extract med_guid from links in this row
-          let guid: string | undefined;
-          try {
-            const links = await rows[i].$$("a[href]");
-            for (const link of links) {
-              const href = await link.getAttribute("href");
-              if (href) {
-                const match = href.match(/med_guid=([^&]+)/);
-                if (match) {
-                  guid = match[1];
-                  break;
-                }
-              }
-            }
-          } catch {
-            // GUID extraction is best-effort
-          }
-
           results.push({
             name,
             activeSubstance: activeSubstance || "(unknown)",
@@ -133,7 +112,6 @@ async function extractSearchResults(
             similarity: combinedSimilarity,
             nameSimilarity,
             substanceSimilarity,
-            guid,
           });
           console.log(
             `Result ${i}: "${name}" | Active: "${activeSubstance || "N/A"}" ` +
@@ -247,54 +225,6 @@ export interface RegulatoryPDFResult {
   confidence: number;
 }
 
-// Download a PDF directly using the med_guid and document type (FI or RCM).
-// Uses the browser context's request API to maintain session cookies without
-// opening a page or triggering route interception.
-async function downloadPdfByGuid(
-  context: BrowserContext,
-  guid: string,
-  type: "FI" | "RCM"
-): Promise<Buffer | null> {
-  try {
-    const url = `https://extranet.infarmed.pt/INFOMED-fo/download-ficheiro.xhtml?med_guid=${encodeURIComponent(guid)}&tipo_doc=${type}`;
-    console.log(`Direct download ${type}: ${url}`);
-
-    const response = await context.request.get(url, { timeout: 15000 });
-
-    const contentType = response.headers()["content-type"] || "";
-    if (
-      response.ok() &&
-      (contentType.includes("application/pdf") || contentType.includes("application/octet-stream"))
-    ) {
-      const body = await response.body();
-      console.log(`✓ ${type} downloaded: ${body.length} bytes`);
-      return Buffer.from(body);
-    }
-
-    console.warn(`Direct ${type} download: status ${response.status()}, content-type: ${contentType}`);
-    return null;
-  } catch (error) {
-    console.warn(`Direct ${type} download failed:`, error);
-    return null;
-  }
-}
-
-// Try downloading both RCM and FI using a known GUID
-async function tryDirectDownload(
-  context: BrowserContext,
-  guid: string
-): Promise<{ rcm: Buffer | null; fi: Buffer | null } | null> {
-  const [rcm, fi] = await Promise.all([
-    downloadPdfByGuid(context, guid, "RCM"),
-    downloadPdfByGuid(context, guid, "FI"),
-  ]);
-
-  if (rcm) {
-    return { rcm, fi };
-  }
-  return null;
-}
-
 // Build search strategies dynamically based on available input fields.
 // Only creates strategies that use fields we actually have, so we don't
 // waste time searching with empty values.
@@ -340,29 +270,31 @@ function buildSearchStrategies(input: MedicineSearchInput): SearchAttempt[] {
 export async function regulatoryPDF(
   medicineInfo: MedicineSearchInput
 ): Promise<RegulatoryPDFResult> {
+  const normalizedName = medicineInfo.name.toLowerCase().trim();
+  const normalizedDosage = medicineInfo.dosage?.toLowerCase().trim();
+  const cacheKey = normalizedDosage
+    ? `${normalizedName}|${normalizedDosage}`
+    : normalizedName;
+
+  // === Phase 1: Check PDF cache — skip Playwright entirely on hit ===
+  const cached = getCachedPdf(cacheKey);
+  if (cached) {
+    console.log(`Cache hit for "${medicineInfo.name}" — returning cached PDF (${cached.rcmPdf?.length ?? 0} bytes)`);
+    return {
+      rcm: cached.rcmPdf,
+      fi: cached.fiPdf,
+      confidence: cached.confidence,
+    };
+  }
+
+  // === Phase 2: Launch browser and search INFARMED ===
   const browser = await chromium.launch({
     headless: true,
-    devtools: false,
   });
   const context = await browser.newContext();
   const page = await context.newPage();
 
   try {
-    const cacheKey = medicineInfo.name.toLowerCase().trim();
-
-    // === Phase 1: Check SQLite GUID cache for instant download ===
-    const cached = getCachedGuid(cacheKey);
-    if (cached) {
-      console.log(`Cache hit for "${medicineInfo.name}" → GUID: ${cached.guid}`);
-      const directResult = await tryDirectDownload(context, cached.guid);
-      if (directResult) {
-        return { ...directResult, confidence: 1.0 };
-      }
-      deleteCachedGuid(cacheKey);
-      console.warn("Cached GUID download failed, proceeding with search");
-    }
-
-    // === Phase 2: Search INFARMED (no route interception — faster) ===
     console.log(
       `Starting PDF search for: ${medicineInfo.name}` +
       (medicineInfo.activeSubstance ? ` (${medicineInfo.activeSubstance})` : "") +
@@ -428,23 +360,8 @@ export async function regulatoryPDF(
       );
     }
 
-    // === Phase 3: Try direct download via GUID (extracted from search results) ===
-    if (bestMatch.guid) {
-      console.log(`GUID found in search results: ${bestMatch.guid} — trying direct download`);
-      const directResult = await tryDirectDownload(context, bestMatch.guid);
-      if (directResult) {
-        setCachedGuid(cacheKey, {
-          guid: bestMatch.guid,
-          name: bestMatch.name,
-          activeSubstance: bestMatch.activeSubstance,
-        });
-        return { ...directResult, candidates, confidence: bestMatch.similarity };
-      }
-      console.warn("Direct download with extracted GUID failed");
-    }
-
-    // === Phase 4: Fallback — click RCM link and intercept PDF response ===
-    console.log("Falling back to click-and-intercept for PDF download");
+    // === Phase 3: Click RCM link and intercept PDF response ===
+    console.log("Click-and-intercept for PDF download");
 
     let resolvePdfPromise: (buffer: Buffer | null) => void;
     const pdfPromise = new Promise<Buffer | null>((resolve) => {
@@ -497,6 +414,17 @@ export async function regulatoryPDF(
 
     if (pdfBuffer) {
       console.log("✓ Successfully retrieved PDF via interception");
+
+      // Cache the PDF bytes for future use
+      setCachedPdf(cacheKey, {
+        rcmPdf: pdfBuffer,
+        fiPdf: null,
+        medicineName: bestMatch.name,
+        activeSubstance: bestMatch.activeSubstance,
+        dosage: normalizedDosage || "",
+        confidence: bestMatch.similarity,
+      });
+      console.log(`Cached PDF for future use: "${medicineInfo.name}" (${pdfBuffer.length} bytes)`);
     } else {
       console.error("✗ Failed to retrieve PDF - timeout or network error");
     }
