@@ -40,7 +40,7 @@ MedaBot solves the problem of quickly accessing reliable medication information 
 
 **Technology**: Playwright browser automation
 
-- Automated web scraping of Portuguese INFARMED database
+- Automated web scraping of Portuguese authority database
 - Headless browser navigation and form submission
 - Network interception to capture PDF downloads
 - Robust error handling and timeout management

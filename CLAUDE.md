@@ -24,7 +24,7 @@ Requires `OPENAI_API_KEY` in `.envrc` (loaded via direnv). Copy from `.envrc.exa
 - **Styling**: Tailwind CSS 4
 - **AI**: OpenAI SDK directly (Vision for identification, Embeddings + Chat for RAG)
 - **PDF Processing**: `pdf-parse` for text extraction
-- **Web Scraping**: Playwright (headless Chromium for INFARMED)
+- **Web Scraping**: Playwright (headless Chromium)
 - **Validation**: Zod schemas
 - **Deployment**: Fly.io via Docker (node:20-slim, port 3000, Madrid region)
 
@@ -33,7 +33,7 @@ Requires `OPENAI_API_KEY` in `.envrc` (loaded via direnv). Copy from `.envrc.exa
 ### Processing Pipeline (5 steps)
 
 1. **Identify** (`app/core/identify.ts`) — OpenAI Vision API analyzes medicine photo, returns structured data (name, brand, active substance, dosage) validated with Zod
-2. **Fetch PDF** (`app/core/regulatoryPdf.ts`) — Playwright automates INFARMED website to find and download the official patient leaflet PDF, using Levenshtein distance for fuzzy name matching
+2. **Fetch PDF** (`app/core/regulatoryPdf.ts`) — Playwright automates authority website to find and download the official patient leaflet PDF, using Levenshtein distance for fuzzy name matching
 3. **Process** (`app/core/leafletProcessor.ts`) — `pdf-parse` extracts text, custom splitter chunks it with paragraph-aware boundaries, OpenAI embeddings stored in memory
 4. **Query** (`app/core/leafletProcessor.ts`) — Cosine similarity search finds top-k relevant chunks, OpenAI Chat API generates answers constrained to leaflet content with page references
 5. **Chat UI** (`app/components/Chat.tsx`) — Streaming-style chat interface with source attribution
@@ -41,6 +41,7 @@ Requires `OPENAI_API_KEY` in `.envrc` (loaded via direnv). Copy from `.envrc.exa
 ### Server-Client Boundary
 
 Server functions live in `app/server/` and use TanStack Start's `createServerFn` with `.inputValidator()` for input validation. Each wraps a core function:
+
 - `performIdentify` → `identify`
 - `fetchRegulatoryPdf` → `regulatoryPdf`
 - `processLeaflet` / `queryLeaflet` → `leafletProcessor`

@@ -19,9 +19,24 @@ const COL_MAP: Record<string, string> = {
   "Comercialização": "commercialized",
 };
 
+function findXlsx(): string | null {
+  // 1. Check CWD (local dev / Docker COPY)
+  const cwdPath = path.join(process.cwd(), XLSX_FILENAME);
+  if (fs.existsSync(cwdPath)) return cwdPath;
+
+  // 2. Check alongside the DB file (Fly.io volume at /data/)
+  const dbPath = process.env.DB_PATH;
+  if (dbPath) {
+    const volPath = path.join(path.dirname(dbPath), XLSX_FILENAME);
+    if (fs.existsSync(volPath)) return volPath;
+  }
+
+  return null;
+}
+
 export function seedMedicines(db: Database.Database): void {
-  const xlsxPath = path.join(process.cwd(), XLSX_FILENAME);
-  if (!fs.existsSync(xlsxPath)) {
+  const xlsxPath = findXlsx();
+  if (!xlsxPath) {
     console.log(`${XLSX_FILENAME} not found — skipping medicine seeding`);
     return;
   }
