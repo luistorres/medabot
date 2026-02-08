@@ -14,3 +14,4 @@ debug-rcm.pdf
 *.db
 *.db-shm
 *.db-wal
+*.xlsx

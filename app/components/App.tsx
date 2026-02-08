@@ -255,7 +255,7 @@ function AppContent() {
   // Handle disambiguation selection
   const handleDisambiguationSelect = async (candidate: Candidate) => {
     setDisambiguation(null);
-    // Keep original medicineInfo (for the same INFARMED search), pass candidate to target the exact row
+    // Keep original medicineInfo (for the same search), pass candidate to target the exact row
     await processMedicineInfo(medicineInfo, undefined, undefined, candidate);
   };
 

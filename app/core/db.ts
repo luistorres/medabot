@@ -1,12 +1,13 @@
 import Database from "better-sqlite3";
 import path from "node:path";
+import { seedMedicines } from "./seedMedicines";
 
 // Store the database next to the server output (persists across restarts on Fly.io volumes)
 const DB_PATH = process.env.DB_PATH || path.join(process.cwd(), "medabot.db");
 
 let db: Database.Database | null = null;
 
-function getDb(): Database.Database {
+export function getDb(): Database.Database {
   if (!db) {
     db = new Database(DB_PATH);
     db.pragma("journal_mode = WAL");
@@ -33,17 +34,50 @@ function getDb(): Database.Database {
       db.exec(`ALTER TABLE pdf_cache ADD COLUMN dosage TEXT NOT NULL DEFAULT ''`);
     }
 
+    // Drop legacy search_cache — replaced by local medicines DB
+    db.exec(`DROP TABLE IF EXISTS search_cache`);
+
+    // --- Medicines catalog tables ---
     db.exec(`
-      CREATE TABLE IF NOT EXISTS search_cache (
-        search_key   TEXT PRIMARY KEY,
-        results_json TEXT NOT NULL,
-        created_at   INTEGER NOT NULL DEFAULT (unixepoch())
+      CREATE TABLE IF NOT EXISTS metadata (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
       )
     `);
 
-    // Clean expired entries (older than 30 days)
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS medicines (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        name                TEXT NOT NULL,
+        active_substance    TEXT NOT NULL DEFAULT '',
+        pharmaceutical_form TEXT NOT NULL DEFAULT '',
+        dosage              TEXT NOT NULL DEFAULT '',
+        titular             TEXT NOT NULL DEFAULT '',
+        generic             TEXT NOT NULL DEFAULT '',
+        commercialized      TEXT NOT NULL DEFAULT ''
+      )
+    `);
+
+    // FTS5 virtual table for full-text search with Portuguese accent handling
+    db.exec(`
+      CREATE VIRTUAL TABLE IF NOT EXISTS medicines_fts USING fts5(
+        name,
+        active_substance,
+        content='medicines',
+        content_rowid='id',
+        tokenize='unicode61 remove_diacritics 2'
+      )
+    `);
+
+    // Clean expired PDF cache entries (older than 30 days)
     db.exec(`DELETE FROM pdf_cache WHERE created_at <= unixepoch() - 2592000`);
-    db.exec(`DELETE FROM search_cache WHERE created_at <= unixepoch() - 2592000`);
+
+    // Seed medicines from authorized.xlsx (no-op if already up-to-date)
+    try {
+      seedMedicines(db);
+    } catch (err: any) {
+      console.warn("Medicine seeding skipped:", err.message);
+    }
   }
   return db;
 }
@@ -117,43 +151,4 @@ export function deleteCachedPdf(nameKey: string): void {
     .run(nameKey);
 }
 
-// --- Search results cache ---
 
-export interface CachedSearchCandidate {
-  name: string;
-  activeSubstance: string;
-  similarity: number;
-  pharmaceuticalForm?: string;
-  dosage?: string;
-  titular?: string;
-}
-
-export function getCachedSearch(searchKey: string): CachedSearchCandidate[] | null {
-  const row = getDb()
-    .prepare(
-      `SELECT results_json FROM search_cache
-       WHERE search_key = ? AND created_at > unixepoch() - 2592000`
-    )
-    .get(searchKey) as { results_json: string } | undefined;
-
-  if (!row) return null;
-  return JSON.parse(row.results_json) as CachedSearchCandidate[];
-}
-
-export function setCachedSearch(searchKey: string, results: CachedSearchCandidate[]): void {
-  getDb()
-    .prepare(
-      `INSERT INTO search_cache (search_key, results_json)
-       VALUES (?, ?)
-       ON CONFLICT(search_key) DO UPDATE SET
-         results_json = excluded.results_json,
-         created_at = unixepoch()`
-    )
-    .run(searchKey, JSON.stringify(results));
-}
-
-export function deleteCachedSearch(searchKey: string): void {
-  getDb()
-    .prepare("DELETE FROM search_cache WHERE search_key = ?")
-    .run(searchKey);
-}
