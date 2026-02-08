@@ -104,19 +104,21 @@ async function main() {
       assert(pdfCols.includes("confidence"), "pdf_cache missing confidence");
       assert(pdfCols.includes("created_at"), "pdf_cache missing created_at");
 
-      const searchCols = tableColumns(db, "search_cache");
-      assert(
-        searchCols.includes("search_key"),
-        "search_cache missing search_key"
-      );
-      assert(
-        searchCols.includes("results_json"),
-        "search_cache missing results_json"
-      );
-      assert(
-        searchCols.includes("created_at"),
-        "search_cache missing created_at"
-      );
+      // Medicines table schema
+      const medCols = tableColumns(db, "medicines");
+      assert(medCols.includes("id"), "medicines missing id");
+      assert(medCols.includes("name"), "medicines missing name");
+      assert(medCols.includes("active_substance"), "medicines missing active_substance");
+      assert(medCols.includes("pharmaceutical_form"), "medicines missing pharmaceutical_form");
+      assert(medCols.includes("dosage"), "medicines missing dosage");
+      assert(medCols.includes("titular"), "medicines missing titular");
+      assert(medCols.includes("generic"), "medicines missing generic");
+      assert(medCols.includes("commercialized"), "medicines missing commercialized");
+
+      // Medicines should be seeded from authorized.xlsx
+      const medCount = rowCount(db, "medicines");
+      assert(medCount > 10000, `Expected >10,000 medicines, got ${medCount}`);
+      console.log(`    (${medCount} medicines seeded)`);
 
       const mode = db.pragma("journal_mode") as { journal_mode: string }[];
       assert(
@@ -134,10 +136,22 @@ async function main() {
     process.exit(code);
   }
 
-  // ── Scenario 1: Fresh "ben-u-ron" search (disambiguation) ───────────────
+  // ── Scenario 0.5: Local search performance ─────────────────────────────
+  await scenario('Scenario 0.5: Local search "ben-u-ron" (<50ms)', async () => {
+    const { searchMedicinesLocally } = await import("../app/core/localSearch.js");
+    const t = timer();
+    const results = searchMedicinesLocally({ name: "ben-u-ron" });
+    const elapsed = t();
+
+    assert(results.length > 1, `Expected multiple local results, got ${results.length}`);
+    assert(elapsed < 50, `Expected <50ms for local search, got ${elapsed}ms`);
+    console.log(`    (${results.length} results in ${elapsed}ms)`);
+  });
+
+  // ── Scenario 1: Fresh "ben-u-ron" search (disambiguation via local DB) ─
   let selectedCandidate: any = null;
 
-  await scenario('Scenario 1: Fresh "ben-u-ron" (disambiguation)', async () => {
+  await scenario('Scenario 1: Fresh "ben-u-ron" (local DB disambiguation)', async () => {
     const t = timer();
     const result = await regulatoryPDF({ name: "ben-u-ron" });
     const elapsed = t();
@@ -147,27 +161,16 @@ async function main() {
       `Expected multiple candidates, got ${result.candidates?.length ?? 0}`
     );
     assert(result.rcm === null, "Expected rcm to be null for disambiguation");
-    assert(elapsed > 2000, `Expected >2s for fresh search, got ${elapsed}ms`);
-
-    // Verify search_cache was populated
-    const db = openTestDb();
-    try {
-      const count = rowCount(db, "search_cache");
-      assert(count >= 1, `Expected >=1 search_cache row, got ${count}`);
-
-      const pdfCount = rowCount(db, "pdf_cache");
-      assert(pdfCount === 0, `Expected 0 pdf_cache rows, got ${pdfCount}`);
-    } finally {
-      db.close();
-    }
+    // Local DB search should be instant (no Playwright)
+    assert(elapsed < 500, `Expected <500ms for local DB search, got ${elapsed}ms`);
 
     // Capture full candidate for later scenarios
     selectedCandidate = result.candidates![0];
     console.log(`    (captured candidate: "${selectedCandidate.name}")`);
   });
 
-  // ── Scenario 2: Repeat "ben-u-ron" (search cache hit) ───────────────────
-  await scenario('Scenario 2: Repeat "ben-u-ron" (search cache hit)', async () => {
+  // ── Scenario 2: Repeat "ben-u-ron" (local DB, consistent results) ───────
+  await scenario('Scenario 2: Repeat "ben-u-ron" (local DB repeat)', async () => {
     const t = timer();
     const result = await regulatoryPDF({ name: "ben-u-ron" });
     const elapsed = t();
@@ -224,7 +227,7 @@ async function main() {
     assert(elapsed < 100, `Expected <100ms for PDF cache hit, got ${elapsed}ms`);
   });
 
-  // ── Scenario 5: Force refresh "ben-u-ron" ──────────────────────────────
+  // ── Scenario 5: Force refresh "ben-u-ron" (re-queries local DB) ───────
   await scenario('Scenario 5: Force refresh "ben-u-ron"', async () => {
     const t = timer();
     const result = await regulatoryPDF({ name: "ben-u-ron" }, true);
@@ -234,7 +237,8 @@ async function main() {
       result.candidates !== undefined && result.candidates.length > 1,
       `Expected multiple candidates after refresh, got ${result.candidates?.length ?? 0}`
     );
-    assert(elapsed > 2000, `Expected >2s for forced re-fetch, got ${elapsed}ms`);
+    // Force refresh still uses local DB — should be fast
+    assert(elapsed < 500, `Expected <500ms for force refresh (local DB), got ${elapsed}ms`);
   });
 
   const code = summary();

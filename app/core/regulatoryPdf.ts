@@ -1,6 +1,8 @@
-import { chromium, Page } from "playwright";
-import { distance } from "fastest-levenshtein";
-import { getCachedPdf, setCachedPdf, deleteCachedPdf, getCachedSearch, setCachedSearch, deleteCachedSearch } from "./db";
+import { chromium, Browser, BrowserContext, Page } from "playwright";
+import { getCachedPdf, setCachedPdf, deleteCachedPdf } from "./db";
+import { stringSimilarity } from "./textUtils";
+import { searchMedicinesLocally } from "./localSearch";
+import { warmupPlaywright, consumeWarmInstance } from "./playwrightPool";
 
 export interface SearchCandidate {
   name: string;
@@ -17,24 +19,6 @@ export interface MedicineSearchInput {
   dosage?: string;
   brand?: string;
   selectedCandidate?: SearchCandidate;
-}
-
-// String similarity function using fastest-levenshtein for fuzzy matching
-function stringSimilarity(str1: string, str2: string): number {
-  const s1 = str1.toLowerCase().trim();
-  const s2 = str2.toLowerCase().trim();
-
-  if (s1 === s2) return 1.0;
-  if (s1.includes(s2) || s2.includes(s1)) return 0.8;
-
-  // Levenshtein distance-based similarity using fastest-levenshtein
-  const longer = s1.length > s2.length ? s1 : s2;
-  const shorter = s1.length > s2.length ? s2 : s1;
-
-  if (longer.length === 0) return 1.0;
-
-  const editDistance = distance(longer, shorter);
-  return (longer.length - editDistance) / longer.length;
 }
 
 interface SearchResult {
@@ -178,6 +162,24 @@ async function performSearch(
       timeout: 15000,
     });
 
+    // Clear default filters (AIM="Autorizado", Comercialização="Comercializado")
+    // which hide non-commercialized medicines that still have PDFs on INFARMED.
+    // "Limpar" triggers a PrimeFaces AJAX that fully rebuilds the form DOM.
+    // We must wait for the old input to be detached and a fresh one to appear.
+    const oldInput = await page.$('input[title$="Nome do Medicamento"]');
+    await page.click('button:has-text("Limpar")');
+    // Wait until PrimeFaces replaces the DOM (old element detaches)
+    if (oldInput) {
+      await page.waitForFunction(
+        (el) => !el.isConnected,
+        oldInput,
+        { timeout: 5000 }
+      ).catch(() => {});
+    }
+    await page.waitForSelector('input[title$="Nome do Medicamento"]', {
+      timeout: 5000,
+    });
+
     // Fill the form fields (clear fields not in attempt by filling with empty string)
     await page.fill(
       'input[title$="Nome do Medicamento"]',
@@ -293,16 +295,10 @@ export async function regulatoryPDF(
       ? `${normalizedName}|${normalizedDosage}`
       : normalizedName;
 
-  // Search cache key is always based on the original search input (not the candidate)
-  const searchCacheKey = normalizedDosage
-    ? `${normalizedName}|${normalizedDosage}`
-    : normalizedName;
-
   // If force-refreshing, delete cached entries so we re-fetch from INFARMED
   if (forceRefresh) {
     console.log(`Force refresh requested — deleting cache for "${medicineInfo.name}"`);
     deleteCachedPdf(cacheKey);
-    deleteCachedSearch(searchCacheKey);
   }
 
   // === Phase 1: Check PDF cache — skip Playwright entirely on hit ===
@@ -316,26 +312,46 @@ export async function regulatoryPDF(
     };
   }
 
-  // === Phase 1.5: Check search results cache (only for original searches, not candidate downloads) ===
+  // === Phase 1.5: Local DB search (instant, no Playwright) ===
   if (!selectedCandidate) {
-    const cachedResults = getCachedSearch(searchCacheKey);
-    if (cachedResults) {
-      if (cachedResults.length > 1) {
-        // Multiple results cached — return candidates for disambiguation (no Playwright)
-        console.log(`Search cache hit for "${searchCacheKey}" — ${cachedResults.length} candidates`);
-        return { rcm: null, fi: null, candidates: cachedResults, confidence: 0 };
+    const localResults = searchMedicinesLocally({
+      name: medicineInfo.name,
+      activeSubstance: medicineInfo.activeSubstance,
+      dosage: medicineInfo.dosage,
+    });
+
+    if (localResults.length > 0) {
+      console.log(`Local DB: ${localResults.length} result(s) for "${medicineInfo.name}"`);
+
+      if (localResults.length > 1) {
+        // Multiple results — fire warmup in background, return candidates
+        warmupPlaywright();
+        return { rcm: null, fi: null, candidates: localResults, confidence: localResults[0].similarity };
       }
-      // Single cached result — skip to PDF download below
-      console.log(`Search cache hit for "${searchCacheKey}" — single result, will download PDF`);
+      // Single result — fall through to Playwright for PDF download
+      console.log(`Local DB: single match "${localResults[0].name}" — proceeding to PDF download`);
+    } else {
+      console.log(`Local DB: no results for "${medicineInfo.name}" — falling back to Playwright search`);
     }
   }
 
   // === Phase 2: Launch browser and search INFARMED ===
-  const browser = await chromium.launch({
-    headless: true,
-  });
-  const context = await browser.newContext();
-  const page = await context.newPage();
+  // Try to reuse a warmed Playwright instance, otherwise launch fresh
+  const warm = await consumeWarmInstance();
+  let browser: Browser;
+  let context: BrowserContext;
+  let page: Page;
+
+  if (warm) {
+    console.log("Reusing warmed Playwright instance");
+    browser = warm.browser;
+    context = warm.context;
+    page = warm.page;
+  } else {
+    browser = await chromium.launch({ headless: true });
+    context = await browser.newContext();
+    page = await context.newPage();
+  }
 
   try {
     let searchResults: SearchResult[] = [];
@@ -347,7 +363,19 @@ export async function regulatoryPDF(
       (selectedCandidate ? ` [targeting: ${selectedCandidate.name} / ${selectedCandidate.dosage} / ${selectedCandidate.pharmaceuticalForm}]` : "")
     );
 
-    const searchStrategies = buildSearchStrategies(medicineInfo);
+    // When targeting a specific candidate, search using its actual name/dosage
+    // instead of the original (possibly abbreviated) user input
+    const searchInput: MedicineSearchInput = selectedCandidate
+      ? {
+          ...medicineInfo,
+          name: selectedCandidate.name,
+          activeSubstance: selectedCandidate.activeSubstance !== "(unknown)"
+            ? selectedCandidate.activeSubstance
+            : medicineInfo.activeSubstance,
+          dosage: selectedCandidate.dosage || medicineInfo.dosage,
+        }
+      : medicineInfo;
+    const searchStrategies = buildSearchStrategies(searchInput);
 
     for (let i = 0; i < searchStrategies.length; i++) {
       console.log(`\n=== Attempt ${i + 1}/${searchStrategies.length} ===`);
@@ -357,8 +385,8 @@ export async function regulatoryPDF(
       if (success) {
         searchResults = await extractSearchResults(
           page,
-          medicineInfo.name,
-          medicineInfo.activeSubstance || undefined
+          searchInput.name,
+          searchInput.activeSubstance || undefined
         );
 
         if (searchResults.length > 0) {
@@ -395,11 +423,22 @@ export async function regulatoryPDF(
           norm(r.pharmaceuticalForm) === norm(selectedCandidate.pharmaceuticalForm)
       );
       if (!match) {
-        console.error(
-          `Could not find selected candidate in INFARMED results: ` +
-          `"${selectedCandidate.name}" / "${selectedCandidate.dosage}" / "${selectedCandidate.pharmaceuticalForm}"`
+        // Candidate from local DB not found on INFARMED — return what INFARMED
+        // does have so the user can pick from actually-available options
+        console.warn(
+          `Selected candidate not found on INFARMED: ` +
+          `"${selectedCandidate.name}" / "${selectedCandidate.dosage}" / "${selectedCandidate.pharmaceuticalForm}" ` +
+          `— returning ${searchResults.length} INFARMED result(s) for re-selection`
         );
-        return { rcm: null, fi: null, confidence: 0 };
+        const fallbackCandidates: SearchCandidate[] = searchResults.map((r) => ({
+          name: r.name,
+          activeSubstance: r.activeSubstance,
+          similarity: r.similarity,
+          pharmaceuticalForm: r.pharmaceuticalForm || undefined,
+          dosage: r.dosage || undefined,
+          titular: r.titular || undefined,
+        }));
+        return { rcm: null, fi: null, candidates: fallbackCandidates, confidence: 0 };
       }
       bestMatch = match;
       console.log(
@@ -415,21 +454,16 @@ export async function regulatoryPDF(
         `  Combined score: ${bestMatch.similarity.toFixed(2)}`
       );
 
-      // Cache search results for future lookups
-      const candidatesForCache = searchResults.map((r) => ({
-        name: r.name,
-        activeSubstance: r.activeSubstance,
-        similarity: r.similarity,
-        pharmaceuticalForm: r.pharmaceuticalForm || undefined,
-        dosage: r.dosage || undefined,
-        titular: r.titular || undefined,
-      }));
-      setCachedSearch(searchCacheKey, candidatesForCache);
-      console.log(`Cached ${candidatesForCache.length} search result(s) under "${searchCacheKey}"`);
-
       // Multiple results — return candidates for disambiguation, skip PDF download
       if (searchResults.length > 1) {
-        const candidates = candidatesForCache;
+        const candidates: SearchCandidate[] = searchResults.map((r) => ({
+          name: r.name,
+          activeSubstance: r.activeSubstance,
+          similarity: r.similarity,
+          pharmaceuticalForm: r.pharmaceuticalForm || undefined,
+          dosage: r.dosage || undefined,
+          titular: r.titular || undefined,
+        }));
         console.log(
           `Multiple results (${searchResults.length}) — returning candidates for user disambiguation`
         );
@@ -535,14 +569,14 @@ export async function regulatoryPDF(
     };
   } finally {
     try {
-      await page.unrouteAll({ behavior: "ignoreErrors" });
-      await context.close();
+      await page?.unrouteAll({ behavior: "ignoreErrors" });
+      await context?.close();
     } catch (cleanupError: any) {
       console.log("Cleanup error (ignoring):", cleanupError.message);
     }
 
     try {
-      await browser.close();
+      await browser?.close();
     } catch (browserError: any) {
       console.log("Browser close error (ignoring):", browserError.message);
     }
