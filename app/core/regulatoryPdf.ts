@@ -47,6 +47,28 @@ async function extractSearchResults(
       timeout: 5000,
     });
 
+    // INFARMED defaults to 10 rows per page. Switch to 100 so we don't miss
+    // results that would appear on later pages (causes disambiguation loops).
+    const rppSelect = page.locator("select.ui-paginator-rpp-options");
+    if (await rppSelect.count() > 0) {
+      const currentVal = await rppSelect.inputValue().catch(() => "10");
+      if (currentVal !== "100") {
+        const rowCountBefore = await page.$$('table[summary="Tabela de resultados"] tbody tr').then(r => r.length);
+        await rppSelect.selectOption("100");
+        // Wait for PrimeFaces AJAX to refresh the table with more rows
+        await page.waitForFunction(
+          (before) => {
+            const rows = document.querySelectorAll('table[summary="Tabela de resultados"] tbody tr');
+            return rows.length !== before || before <= 10;
+          },
+          rowCountBefore,
+          { timeout: 10000 }
+        ).catch(() => { /* table may already have ≤10 rows */ });
+        // Small settle delay for DOM to stabilise after AJAX
+        await page.waitForTimeout(500);
+      }
+    }
+
     // Extract all medicine names from the results table
     const rows = await page.$$(
       'table[summary="Tabela de resultados"] tbody tr'
