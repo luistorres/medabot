@@ -77,11 +77,14 @@ async function extractSearchResults(
           }
         }
 
-        const name = allCellTexts[dataStart]?.trim() || "";
-        const activeSubstance = allCellTexts[dataStart + 1]?.trim() || "";
-        const pharmaceuticalForm = allCellTexts[dataStart + 2]?.trim() || "";
-        const dosage = allCellTexts[dataStart + 3]?.trim() || "";
-        const titular = allCellTexts[dataStart + 4]?.trim() || "";
+        const clean = (s?: string) => (s || "").replace(/\s+/g, " ").trim();
+        // INFARMED appends badge suffixes in the HTML cell (MG = Genérico,
+        // MB = Biossimilar, MP = Pediátrico); textContent() picks them up — strip them.
+        const name = clean(allCellTexts[dataStart]).replace(/\s+(?:MG|MB|MP)$/i, "");
+        const activeSubstance = clean(allCellTexts[dataStart + 1]);
+        const pharmaceuticalForm = clean(allCellTexts[dataStart + 2]);
+        const dosage = clean(allCellTexts[dataStart + 3]);
+        const titular = clean(allCellTexts[dataStart + 4]);
 
         // Skip "no results" messages in Portuguese
         const isNoResultsMessage =
@@ -295,10 +298,12 @@ export async function regulatoryPDF(
   const normalizedName = medicineInfo.name.toLowerCase().trim();
   const normalizedDosage = medicineInfo.dosage?.toLowerCase().trim();
 
-  // Build cache key: candidate-specific when user already picked, otherwise search-based
+  // Build cache key: candidate-specific when user already picked, otherwise search-based.
+  // Normalise whitespace & strip trailing "MG" to avoid duplicate cache entries.
+  const normKey = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim().replace(/\s+(?:mg|mb|mp)$/, "");
   const cacheKey = selectedCandidate
     ? [selectedCandidate.name, selectedCandidate.dosage || "", selectedCandidate.pharmaceuticalForm || ""]
-        .map((s) => s.toLowerCase().trim())
+        .map(normKey)
         .join("|")
     : normalizedDosage
       ? `${normalizedName}|${normalizedDosage}`
@@ -380,15 +385,19 @@ export async function regulatoryPDF(
     );
 
     // When targeting a specific candidate, search using its actual name/dosage
-    // instead of the original (possibly abbreviated) user input
+    // instead of the original (possibly abbreviated) user input.
+    // Clean whitespace and trailing "MG" (Medicamento Genérico badge) from
+    // candidate fields — they may carry INFARMED HTML artefacts.
+    const cleanField = (s?: string) => (s || "").replace(/\s+/g, " ").trim();
+    const cleanName = (s?: string) => cleanField(s).replace(/\s+(?:MG|MB|MP)$/i, "");
     const searchInput: MedicineSearchInput = selectedCandidate
       ? {
           ...medicineInfo,
-          name: selectedCandidate.name,
+          name: cleanName(selectedCandidate.name),
           activeSubstance: selectedCandidate.activeSubstance !== "(unknown)"
-            ? selectedCandidate.activeSubstance
+            ? cleanField(selectedCandidate.activeSubstance)
             : medicineInfo.activeSubstance,
-          dosage: selectedCandidate.dosage || medicineInfo.dosage,
+          dosage: cleanField(selectedCandidate.dosage) || medicineInfo.dosage,
         }
       : medicineInfo;
     const searchStrategies = buildSearchStrategies(searchInput);
@@ -431,7 +440,7 @@ export async function regulatoryPDF(
 
     if (selectedCandidate) {
       // User already picked — find the exact row matching all fields
-      const norm = (s?: string) => (s || "").toLowerCase().trim();
+      const norm = (s?: string) => (s || "").toLowerCase().replace(/\s+/g, " ").trim().replace(/\s+(?:mg|mb|mp)$/, "");
       const match = searchResults.find(
         (r) =>
           norm(r.name) === norm(selectedCandidate.name) &&

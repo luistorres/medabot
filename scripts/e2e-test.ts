@@ -130,6 +130,45 @@ async function main() {
     }
   });
 
+  // ── Scenario 0.1: INFARMED badge suffix stripping (MG, MB, MP) ──────────
+  await scenario("Scenario 0.1: INFARMED badge suffix stripping", async () => {
+    // Simulates textContent() output from INFARMED HTML cells.
+    // The clean+strip logic in extractSearchResults and norm/cleanName must
+    // handle all three badge types: MG, MB, MP.
+    const clean = (s: string) => s.replace(/\s+/g, " ").trim().replace(/\s+(?:MG|MB|MP)$/i, "");
+
+    // MG (Medicamento Genérico)
+    assert(
+      clean("Amoxicilina Generis\n\t\t\t\t\t\t\t\t\t\t\tMG") === "Amoxicilina Generis",
+      "Failed to strip MG suffix with embedded whitespace"
+    );
+    // MB (Medicamento Biossimilar)
+    assert(
+      clean("Adalimumab Amgen\n\t\t\t\t\t\t\t\tMB") === "Adalimumab Amgen",
+      "Failed to strip MB suffix with embedded whitespace"
+    );
+    // MP (Medicamento Pediátrico)
+    assert(
+      clean("Ibuprofeno Pediátrico\n\t\t\tMP") === "Ibuprofeno Pediátrico",
+      "Failed to strip MP suffix with embedded whitespace"
+    );
+    // No suffix — should be unchanged
+    assert(
+      clean("Ben-U-Ron") === "Ben-U-Ron",
+      "Incorrectly modified name without badge suffix"
+    );
+    // Suffix in the middle — should NOT be stripped (only trailing)
+    assert(
+      clean("MG Pharma 500mg") === "MG Pharma 500mg",
+      "Incorrectly stripped non-trailing MG"
+    );
+    // "mg" as dosage unit at end (lowercase, no preceding space-only pattern)
+    assert(
+      clean("Paracetamol 500mg") === "Paracetamol 500mg",
+      "Incorrectly stripped 'mg' from dosage"
+    );
+  });
+
   if (smokeOnly) {
     const code = summary();
     cleanup();
@@ -227,8 +266,48 @@ async function main() {
     assert(elapsed < 100, `Expected <100ms for PDF cache hit, got ${elapsed}ms`);
   });
 
-  // ── Scenario 5: Force refresh "ben-u-ron" (re-queries local DB) ───────
-  await scenario('Scenario 5: Force refresh "ben-u-ron"', async () => {
+  // ── Scenario 5: Disambiguation with dirty whitespace candidate ────────
+  // Reproduces the infinite-loop bug where INFARMED names contain embedded
+  // newlines/tabs that prevented the selected candidate from matching.
+  await scenario("Scenario 5: Disambiguation with whitespace-dirty candidate", async () => {
+    // Simulate a candidate whose fields contain INFARMED-style embedded whitespace
+    const dirtyCandidate = {
+      name: "Amoxicilina + Ácido Clavulânico Generis\n\t\t\t\t\t\t\t\t\t\t\tMG",
+      activeSubstance: "Amoxicilina + Ácido clavulânico",
+      similarity: 0.86,
+      pharmaceuticalForm: "Pó para solução injetável",
+      dosage: "1000 mg + 200 mg",
+      titular: "Eugia Pharma (Malta) Limited",
+    };
+
+    const t = timer();
+    const result = await regulatoryPDF({
+      name: dirtyCandidate.name,
+      selectedCandidate: dirtyCandidate,
+    });
+    const elapsed = t();
+
+    // The fix normalises whitespace so the match succeeds.
+    // If the bug regresses, regulatoryPDF returns candidates (disambiguation loop).
+    const looped = result.candidates && result.candidates.length > 0;
+    assert(!looped, "Disambiguation loop detected — candidate returned again instead of PDF");
+
+    // Should get a PDF (or at least not loop)
+    if (result.rcm) {
+      assert(
+        result.rcm.subarray(0, 5).toString("ascii").startsWith("%PDF"),
+        "Expected PDF magic bytes"
+      );
+      console.log(`    (PDF: ${result.rcm.length} bytes, ${elapsed}ms)`);
+    } else {
+      // If INFARMED is down or the medicine isn't found, that's OK — the key
+      // assertion is that we didn't loop back into disambiguation.
+      console.log(`    (no PDF returned, but no loop — OK, ${elapsed}ms)`);
+    }
+  });
+
+  // ── Scenario 6: Force refresh "ben-u-ron" (re-queries local DB) ───────
+  await scenario('Scenario 6: Force refresh "ben-u-ron"', async () => {
     const t = timer();
     const result = await regulatoryPDF({ name: "ben-u-ron" }, true);
     const elapsed = t();
