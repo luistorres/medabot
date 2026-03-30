@@ -20,10 +20,9 @@ export const identifyMedicine = async (
 ): Promise<IdentifyMedicineResponse> => {
   const base64Image = image.split(",")[1];
 
-  // gpt-4o-mini: cheapest mini model ($0.15/$0.60 per 1M tokens)
-  // Consider gpt-5-mini for better performance when available
+  // gpt-5-mini: better vision performance ($0.25/$2.00 per 1M tokens)
   const completion = await openai.chat.completions.parse({
-    model: "gpt-4o-mini",
+    model: "gpt-5-mini",
     response_format: zodResponseFormat(IdentifyMedicineSchema, "medicine"),
     messages: [
       {
