@@ -128,7 +128,7 @@ export async function queryLeaflet(
     const response = await openai.chat.completions.create({
       model: "gpt-5-nano",
       temperature: 0.1,
-      max_tokens: 1000,
+      max_completion_tokens: 1000,
       messages: [
         {
           role: "system",
