@@ -16,7 +16,8 @@ export const parseSearchInput = createServerFn({
     try {
       const response = await openai.chat.completions.create({
         model: "gpt-5-nano",
-        max_completion_tokens: 200,
+        reasoning_effort: "minimal",
+        max_completion_tokens: 500,
         messages: [
           {
             role: "system",

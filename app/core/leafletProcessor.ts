@@ -126,8 +126,9 @@ export async function queryLeaflet(
 
     // Direct chat completion — same pattern as identify.ts
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      max_completion_tokens: 1000,
+      model: "gpt-5-nano",
+      reasoning_effort: "low",
+      max_completion_tokens: 4000,
       messages: [
         {
           role: "system",
