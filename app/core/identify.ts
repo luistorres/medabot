@@ -43,7 +43,7 @@ export const identifyMedicine = async (
         ],
       },
     ],
-    max_completion_tokens: 300,
+    max_completion_tokens: 2000,
   });
 
   const parsed = completion.choices[0].message.parsed;
