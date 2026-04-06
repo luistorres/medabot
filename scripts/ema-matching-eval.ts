@@ -310,19 +310,19 @@ for (const tc of corpus) {
     failed++;
     const direction = tc.shouldMatch ? "FALSE NEGATIVE" : "FALSE POSITIVE";
     failures.push(
-      `  ${direction}: ${tc.description}\n` +
-      `    Input: "${tc.aiInput}" substance="${tc.activeSubstance || "(none)}"\n` +
-      `    EMA: "${tc.emaName}" substance="${tc.emaSubstance}"\n` +
-      `    Brand sim: ${result.brandSim.toFixed(3)}, Substance sim: ${result.substSim.toFixed(3)}, Score: ${result.score.toFixed(3)}`
+      "  " + direction + ": " + tc.description + "\n" +
+      "    Input: \"" + tc.aiInput + "\" substance=\"" + (tc.activeSubstance || "(none)") + "\"\n" +
+      "    EMA: \"" + tc.emaName + "\" substance=\"" + tc.emaSubstance + "\"\n" +
+      "    Brand sim: " + result.brandSim.toFixed(3) + ", Substance sim: " + result.substSim.toFixed(3) + ", Score: " + result.score.toFixed(3)
     );
   }
 }
 
-console.log(`\n=== EMA Matching Evaluation ===`);
-console.log(`Total: ${corpus.length} | Passed: ${passed} | Failed: ${failed}`);
+console.log("\n=== EMA Matching Evaluation ===");
+console.log("Total: " + corpus.length + " | Passed: " + passed + " | Failed: " + failed);
 
 if (failures.length > 0) {
-  console.log(`\nFAILURES:\n${failures.join("\n\n")}`);
+  console.log("\nFAILURES:\n" + failures.join("\n\n"));
   process.exit(1);
 } else {
   console.log("\nAll test cases passed. Zero false positives.");

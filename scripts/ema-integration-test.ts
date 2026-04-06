@@ -206,8 +206,8 @@ console.log("\nCache key isolation:");
 
 test("INFARMED and EMA cache keys are different", () => {
   const cacheKey = "ozempic|1 mg";
-  const emaCacheKey = `ema:${cacheKey}`;
-  assert(cacheKey !== emaCacheKey, "Keys should be different");
+  const emaCacheKey = "ema:" + cacheKey;
+  assert(cacheKey !== emaCacheKey as string, "Keys should be different");
   assert(emaCacheKey.startsWith("ema:"), "EMA key should have ema: prefix");
 });
 

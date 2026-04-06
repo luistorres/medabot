@@ -79,7 +79,7 @@ async function fetchEmaMedicines(): Promise<EMAMedicine[]> {
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
   if (!response.ok) {
-    throw new Error(`EMA medicines JSON fetch failed: ${response.status}`);
+    throw new Error("EMA medicines JSON fetch failed: " + response.status);
   }
 
   const json = await response.json();
@@ -99,7 +99,7 @@ async function fetchEmaMedicines(): Promise<EMAMedicine[]> {
     (m: EMAMedicine) =>
       m.medicine_status === "Authorised" && m.category === "Human"
   );
-  console.log(`EMA: Loaded ${filtered.length} authorised human medicines (from ${data.length} total)`);
+  console.log("EMA: Loaded " + filtered.length + " authorised human medicines (from " + data.length + " total)");
   return filtered;
 }
 
@@ -109,7 +109,7 @@ async function fetchEmaDocuments(): Promise<EPARDocument[]> {
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
   if (!response.ok) {
-    throw new Error(`EMA EPAR documents JSON fetch failed: ${response.status}`);
+    throw new Error("EMA EPAR documents JSON fetch failed: " + response.status);
   }
 
   const json = await response.json();
@@ -126,27 +126,24 @@ async function fetchEmaDocuments(): Promise<EPARDocument[]> {
       !d.name?.toLowerCase().includes("tracked") &&
       d.translations?.pt
   );
-  console.log(`EMA: Found ${piDocs.length} product info PDFs with Portuguese translations`);
+  console.log("EMA: Found " + piDocs.length + " product info PDFs with Portuguese translations");
   return piDocs;
 }
 
 // --- Brand name extraction ---
 
-/** Extract brand name from AI-identified input like "Ozempic 1mg caneta pré-cheia" → "Ozempic" */
+const DOSAGE_FORM_PATTERN = /^(mg|ml|g|mcg|comprimido|capsula|solucao|caneta|po|suspensao)s?$/i;
+
 function extractBrandName(input: string): string {
   const trimmed = input.trim();
-  // Split on whitespace and take the first token
-  const firstToken = trimmed.split(/\s+/)[0];
-  // If the second token looks like part of the name (not a number/dosage), include it
-  // e.g. "Ben-u-ron" is one token, "Nexium Control" is two
   const tokens = trimmed.split(/\s+/);
+  const firstToken = tokens[0];
   if (
     tokens.length > 1 &&
     !/^\d/.test(tokens[1]) &&
-    !tokens[1].match(/^(mg|ml|g|mcg|comprimido|cápsula|solução|caneta|pó|suspensão)s?$/i)
+    !DOSAGE_FORM_PATTERN.test(tokens[1])
   ) {
-    // Check if including second token improves specificity
-    const twoTokens = `${tokens[0]} ${tokens[1]}`;
+    const twoTokens = tokens[0] + " " + tokens[1];
     if (twoTokens.length <= 30) {
       return twoTokens;
     }
@@ -169,7 +166,7 @@ export async function searchEMA(
   }
 
   const brandName = extractBrandName(name);
-  console.log(`EMA: Searching for brand="${brandName}" substance="${activeSubstance || "(none)}"`);
+  console.log("EMA: Searching for brand=\"" + brandName + "\" substance=\"" + (activeSubstance || "(none)") + "\"");
 
   let bestMatch: { medicine: EMAMedicine; score: number } | null = null;
 
@@ -200,11 +197,11 @@ export async function searchEMA(
 
   const med = bestMatch.medicine;
   const slug = med.medicine_url.split("/").pop() || "";
-  const pdfUrl = `${EMA_PDF_BASE_URL}/${slug}-epar-product-information_pt.pdf`;
+  const pdfUrl = EMA_PDF_BASE_URL + "/" + slug + "-epar-product-information_pt.pdf";
 
   console.log(
-    `EMA: Best match "${med.name_of_medicine}" (${med.active_substance}) ` +
-    `score=${bestMatch.score.toFixed(3)} slug="${slug}"`
+    "EMA: Best match \"" + med.name_of_medicine + "\" (" + med.active_substance + ") " +
+    "score=" + bestMatch.score.toFixed(3) + " slug=\"" + slug + "\""
   );
 
   return {
@@ -225,18 +222,18 @@ export async function downloadEMAPdf(
   medicineName?: string
 ): Promise<Buffer | null> {
   // Tier 1: Construct URL from slug
-  const tier1Url = `${EMA_PDF_BASE_URL}/${slug}-epar-product-information_pt.pdf`;
-  console.log(`EMA: Downloading PDF (tier 1): ${tier1Url}`);
+  const tier1Url = EMA_PDF_BASE_URL + "/" + slug + "-epar-product-information_pt.pdf";
+  console.log("EMA: Downloading PDF (tier 1): " + tier1Url);
 
   const tier1Result = await fetchAndValidatePdf(tier1Url);
   if (tier1Result) return tier1Result;
 
   // Tier 2: Look up explicit PT URL from EPAR documents JSON
   if (medicineName) {
-    console.log(`EMA: Tier 1 failed, trying EPAR documents lookup for "${medicineName}"`);
+    console.log("EMA: Tier 1 failed, trying EPAR documents lookup for \"" + medicineName + "\"");
     const ptUrl = await lookupEparDocumentUrl(medicineName);
     if (ptUrl) {
-      console.log(`EMA: Found explicit PT URL: ${ptUrl}`);
+      console.log("EMA: Found explicit PT URL: " + ptUrl);
       const tier2Result = await fetchAndValidatePdf(ptUrl);
       if (tier2Result) return tier2Result;
     }
@@ -254,7 +251,7 @@ async function fetchAndValidatePdf(url: string): Promise<Buffer | null> {
     });
 
     if (!response.ok) {
-      console.log(`EMA: HTTP ${response.status} for ${url}`);
+      console.log("EMA: HTTP " + response.status + " for " + url);
       return null;
     }
 
@@ -273,7 +270,7 @@ async function fetchAndValidatePdf(url: string): Promise<Buffer | null> {
       return null;
     }
 
-    console.log(`EMA: Valid Portuguese PDF downloaded (${buffer.length} bytes)`);
+    console.log("EMA: Valid Portuguese PDF downloaded (" + buffer.length + " bytes)");
     return buffer;
   } catch (err) {
     console.error("EMA: PDF fetch error:", err);
@@ -284,16 +281,13 @@ async function fetchAndValidatePdf(url: string): Promise<Buffer | null> {
 async function validatePortugueseContent(buffer: Buffer): Promise<boolean> {
   try {
     const pdfParse = (await import("pdf-parse")).default;
-    // Only parse first few pages for speed
     const data = await pdfParse(buffer, { max: 3 });
     const text = data.text.substring(0, 2000);
     return (
-      text.includes("RESUMO DAS CARACTERÍSTICAS DO MEDICAMENTO") ||
-      text.includes("RESUMO DAS CARACTER") || // handle encoding variations
+      text.includes("RESUMO DAS CARACTER") ||
       text.includes("ANEXO I")
     );
   } catch {
-    // If pdf-parse fails, accept the PDF (better than rejecting a valid one)
     console.warn("EMA: pdf-parse validation failed, accepting PDF");
     return true;
   }
@@ -304,7 +298,6 @@ async function lookupEparDocumentUrl(medicineName: string): Promise<string | nul
     const docs = await getEmaDocuments();
     const normalizedName = medicineName.toLowerCase().trim();
 
-    // Search for matching document by medicine name in title
     const match = docs.find((d) => {
       const docName = d.name.toLowerCase();
       return docName.includes(normalizedName) || normalizedName.includes(docName.split(":")[0].trim());
