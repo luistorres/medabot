@@ -13,7 +13,7 @@ export const suggestFollowUps = createServerFn({
   .handler(async ({ data }): Promise<string[]> => {
     try {
       const response = await openai.chat.completions.create({
-        model: "gpt-5-nano",
+        model: "gpt-5.4-mini",
         reasoning_effort: "minimal",
         max_completion_tokens: 1000,
         messages: [

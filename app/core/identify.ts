@@ -20,9 +20,9 @@ export const identifyMedicine = async (
 ): Promise<IdentifyMedicineResponse> => {
   const base64Image = image.split(",")[1];
 
-  // gpt-5-mini: better vision performance ($0.25/$2.00 per 1M tokens)
   const completion = await openai.chat.completions.parse({
-    model: "gpt-5-mini",
+    model: "gpt-5.4-mini",
+    reasoning_effort: "low",
     response_format: zodResponseFormat(IdentifyMedicineSchema, "medicine"),
     messages: [
       {
