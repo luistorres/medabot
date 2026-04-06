@@ -14,7 +14,7 @@ export const suggestFollowUps = createServerFn({
     try {
       const response = await openai.chat.completions.create({
         model: "gpt-5-nano",
-        temperature: 0.7,
+        temperature: 1,
         max_completion_tokens: 150,
         messages: [
           {
