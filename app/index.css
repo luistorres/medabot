@@ -1,4 +1,9 @@
-@import "tailwindcss";
+@import "tailwindcss" source(none);
+@source "./components";
+@source "./routes";
+@source "./context";
+@source "./hooks";
+@source "./utils";
 
 @theme {
   --font-sans: "Outfit", system-ui, sans-serif;
