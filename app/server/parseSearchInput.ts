@@ -15,9 +15,8 @@ export const parseSearchInput = createServerFn({
   .handler(async ({ data }): Promise<ParsedSearchResult> => {
     try {
       const response = await openai.chat.completions.create({
-        model: "gpt-5-nano",
-        reasoning_effort: "minimal",
-        max_completion_tokens: 500,
+        model: "gpt-4o-mini",
+        max_tokens: 200,
         messages: [
           {
             role: "system",
