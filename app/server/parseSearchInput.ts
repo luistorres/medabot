@@ -16,7 +16,6 @@ export const parseSearchInput = createServerFn({
     try {
       const response = await openai.chat.completions.create({
         model: "gpt-5-nano",
-        temperature: 1,
         max_completion_tokens: 200,
         messages: [
           {
