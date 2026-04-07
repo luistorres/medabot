@@ -42,7 +42,7 @@ const EMA_PDF_BASE_URL =
 const FETCH_TIMEOUT_MS = 30_000;
 
 // Safety thresholds (calibrated via adversarial review)
-const BRAND_ONLY_THRESHOLD = 0.85;
+const BRAND_ONLY_THRESHOLD = 0.86;
 const BRAND_DUAL_THRESHOLD = 0.7;
 const SUBSTANCE_DUAL_THRESHOLD = 0.5;
 

@@ -8,7 +8,7 @@
 import { stringSimilarity } from "../app/core/textUtils";
 
 // --- Constants (must match emaFallback.ts) ---
-const BRAND_ONLY_THRESHOLD = 0.85;
+const BRAND_ONLY_THRESHOLD = 0.86;
 const BRAND_DUAL_THRESHOLD = 0.7;
 const SUBSTANCE_DUAL_THRESHOLD = 0.5;
 
