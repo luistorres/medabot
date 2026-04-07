@@ -67,6 +67,7 @@ function AppContent() {
   const [failedStep, setFailedStep] = useState<string>("");
   const [searchMessage, setSearchMessage] = useState<string>("");
   const [disambiguation, setDisambiguation] = useState<Candidate[] | null>(null);
+  const [pdfSource, setPdfSource] = useState<"infarmed" | "ema">("infarmed");
 
   const { pdfData, setPdfData, setCurrentPage, setTotalPages } = usePDF();
 
@@ -106,7 +107,10 @@ function AppContent() {
       throw new Error("Não foi possível encontrar o folheto informativo deste medicamento.");
     }
 
-    // Enrich medicineInfo with matched medicine data from INFARMED
+    // Track the PDF source for the UI badge
+    setPdfSource(pdfResponse.source || "infarmed");
+
+    // Enrich medicineInfo with matched medicine data
     if (pdfResponse.matchedMedicine) {
       const m = pdfResponse.matchedMedicine;
       setMedicineInfo((prev) => ({
@@ -298,6 +302,7 @@ function AppContent() {
     setFailedStep("");
     setDisambiguation(null);
     setSearchMessage("");
+    setPdfSource("infarmed");
   };
 
   // Force refresh — re-fetch leaflet from INFARMED, bypassing cache
@@ -420,6 +425,7 @@ function AppContent() {
           image={image}
           pdfData={pdfData}
           summary={medicineSummary}
+          pdfSource={pdfSource}
           onReset={handleReset}
           onDownloadPdf={downloadPdf}
           onForceRefresh={handleForceRefresh}

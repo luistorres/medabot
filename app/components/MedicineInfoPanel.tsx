@@ -8,6 +8,7 @@ interface MedicineInfoPanelProps {
   image: string | null;
   pdfData: string | null;
   summary?: MedicineSummary | null;
+  pdfSource?: "infarmed" | "ema";
   onReset: () => void;
   onDownloadPdf: () => void;
   onForceRefresh: () => void;
@@ -18,6 +19,7 @@ const MedicineInfoPanel = ({
   image,
   pdfData,
   summary,
+  pdfSource = "infarmed",
   onReset,
   onDownloadPdf,
   onForceRefresh,
@@ -49,9 +51,18 @@ const MedicineInfoPanel = ({
               />
             )}
             <div className="flex-1 min-w-0">
-              <h2 className="text-lg font-700 text-gray-900 tracking-tight leading-tight">
-                {medicineInfo.name}
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-700 text-gray-900 tracking-tight leading-tight">
+                  {medicineInfo.name}
+                </h2>
+                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide flex-shrink-0 ${
+                  pdfSource === "ema"
+                    ? "bg-blue-50 text-blue-600 ring-1 ring-blue-200"
+                    : "bg-green-50 text-green-600 ring-1 ring-green-200"
+                }`}>
+                  {pdfSource === "ema" ? "EMA" : "INFARMED"}
+                </span>
+              </div>
               {showBrandChip && (
                 <p className="text-[13px] text-gray-400 font-light mt-0.5">
                   {medicineInfo.brand}
