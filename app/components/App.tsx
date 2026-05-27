@@ -78,13 +78,13 @@ function AppContent() {
   const [searchMessage, setSearchMessage] = useState<string>("");
   const [disambiguation, setDisambiguation] = useState<Candidate[] | null>(null);
 
-  const { pdfData, setPdfData, setCurrentPage, setTotalPages } = usePDF();
+  const { pdfData, setPdfData, setCurrentPage, setTotalPages, setCameFromChat, setActiveTab, setIsPdfViewerOpen } = usePDF();
 
   // Saved intermediate results for retry
   const [savedPdfBase64, setSavedPdfBase64] = useState<string | null>(null);
 
   const markStepComplete = (stepId: string) => {
-    setCompletedSteps((prev) => [...prev, stepId]);
+    setCompletedSteps((prev) => (prev.includes(stepId) ? prev : [...prev, stepId]));
     setCurrentStep("");
   };
 
@@ -172,8 +172,11 @@ function AppContent() {
   };
 
   // Process medicine info (per-step error handling)
-  const processMedicineInfo = async (info: IdentifyMedicineResponse, startFromStep?: string, forceRefresh?: boolean, selectedCandidate?: Candidate) => {
-    const cameFromCamera = screen.name === "camera";
+  const processMedicineInfo = async (
+    info: IdentifyMedicineResponse,
+    opts: { startFromStep?: string; forceRefresh?: boolean; selectedCandidate?: Candidate; skipIdentify?: boolean } = {},
+  ) => {
+    const { startFromStep, forceRefresh, selectedCandidate, skipIdentify = false } = opts;
     setMedicineInfo(info);
     setScreen({ name: "processing" });
     setLoading(true);
@@ -184,8 +187,8 @@ function AppContent() {
     if (!startFromStep) {
       setCompletedSteps([]);
       setCurrentStep("");
-      // Skip identify step if not coming from camera
-      if (!cameFromCamera) {
+      // Camera flow marks "identify" itself; every other entry auto-completes it
+      if (!skipIdentify) {
         markStepComplete("identify");
       }
     }
@@ -235,16 +238,9 @@ function AppContent() {
     setFailedStep("");
     setLoading(true);
 
-    try {
-      if (stepId === "fetch") {
-        await processMedicineInfo(medicineInfo, "fetch");
-      } else if (stepId === "process") {
-        await processMedicineInfo(medicineInfo, "process");
-      } else if (stepId === "overview") {
-        await processMedicineInfo(medicineInfo, "overview");
-      }
-    } catch (error) {
-      handleStepError(stepId, error);
+    // processMedicineInfo handles its own errors via handleStepError.
+    if (stepId === "fetch" || stepId === "process" || stepId === "overview") {
+      await processMedicineInfo(medicineInfo, { startFromStep: stepId });
     }
   };
 
@@ -265,7 +261,7 @@ function AppContent() {
       setMedicineInfo(info);
       markStepComplete("identify");
 
-      await processMedicineInfo(info);
+      await processMedicineInfo(info, { skipIdentify: true });
     } catch (error) {
       handleStepError("identify", error);
     }
@@ -289,7 +285,7 @@ function AppContent() {
       titular: candidate.titular,
     };
     setMedicineInfo(enrichedInfo);
-    await processMedicineInfo(enrichedInfo, undefined, undefined, candidate);
+    await processMedicineInfo(enrichedInfo, { selectedCandidate: candidate });
   };
 
   // Reset to landing
@@ -309,11 +305,17 @@ function AppContent() {
     setFailedStep("");
     setDisambiguation(null);
     setSearchMessage("");
+    setLoading(false);
+    // Reset PDF viewer state so a fresh session never inherits a stale
+    // "Voltar ao Chat" affordance or a non-default tab.
+    setCameFromChat(false);
+    setActiveTab("chat");
+    setIsPdfViewerOpen(false);
   };
 
   // Force refresh — re-fetch leaflet from INFARMED, bypassing cache
   const handleForceRefresh = async () => {
-    await processMedicineInfo(medicineInfo, undefined, true);
+    await processMedicineInfo(medicineInfo, { forceRefresh: true });
   };
 
   // Download PDF
@@ -379,6 +381,7 @@ function AppContent() {
     const cancelTo: Screen = screen.origin === "search" ? { name: "search" } : { name: "landing" };
     return (
       <ManualMedicineForm
+        key={`manual-${screen.origin}`}
         onSubmit={handleManualSubmit}
         onCancel={() => setScreen(cancelTo)}
         onCancelToLanding={handleReset}
