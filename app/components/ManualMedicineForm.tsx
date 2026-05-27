@@ -1,5 +1,8 @@
 import { useState } from "react";
 import { IdentifyMedicineResponse } from "../core/identify";
+import Button from "./ui/Button";
+import { Wordmark } from "./ui/Wordmark";
+import { Icon } from "./ui/Icon";
 
 interface ManualMedicineFormProps {
   onSubmit: (data: IdentifyMedicineResponse) => void;
@@ -75,48 +78,42 @@ const ManualMedicineForm = ({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50/40 to-white flex items-center justify-center p-4">
-      <div className="max-w-2xl w-full">
-        <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8">
-          {/* Header */}
-          <div className="flex items-center mb-6">
-            <button
-              onClick={onCancel}
-              className="mr-4 text-gray-400 hover:text-gray-700 transition-colors"
-              aria-label="Voltar"
-            >
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M15 19l-7-7 7-7"
-                />
-              </svg>
-            </button>
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">
-                Pesquisa avançada
-              </h2>
-              <p className="text-sm text-gray-500 mt-1">
-                Preencha os campos com a informação da embalagem
-              </p>
-            </div>
-          </div>
+    <div className="min-h-screen bg-bg flex flex-col">
+      {/* Mobile header */}
+      <div className="flex items-center justify-between px-6 py-3.5 border-b border-rule">
+        <button
+          onClick={onCancel}
+          className="text-ink-2 hover:text-ink transition-colors flex items-center"
+          aria-label="Voltar"
+        >
+          <Icon.back className="w-5 h-5" />
+        </button>
+        <Wordmark size={16} />
+        <span className="w-5" />
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-lg mx-auto px-6 pt-7 pb-10">
+          {/* Eyebrow + heading */}
+          <p className="text-[11px] uppercase tracking-[0.12em] text-brand font-medium mb-2.5">
+            Procurar com mais detalhe
+          </p>
+          <h1 className="font-serif text-[28px] font-normal leading-[1.1] tracking-[-0.02em] text-ink mb-2">
+            Pesquisa avançada
+          </h1>
+          <p className="text-[14px] leading-[1.5] text-ink-2 mb-8">
+            Preencha os campos com a informação da embalagem
+          </p>
 
           <form onSubmit={handleSubmit} className="space-y-6" noValidate>
             {/* Name Field */}
             <div>
               <label
                 htmlFor="name"
-                className="block text-sm font-semibold text-gray-700 mb-2"
+                className="block text-[11px] uppercase tracking-[0.1em] text-muted font-medium mb-1.5"
               >
-                Nome do medicamento <span className="text-error-600">*</span>
+                Nome do medicamento <span className="text-error normal-case tracking-normal">*</span>
               </label>
               <input
                 type="text"
@@ -126,14 +123,14 @@ const ManualMedicineForm = ({
                 onBlur={() => handleBlur("name")}
                 placeholder="Ex: Paracetamol"
                 autoFocus
-                className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors ${
+                className={`w-full bg-paper border rounded-lg px-3 py-2.5 text-[15px] text-ink placeholder:text-faint focus:outline-none transition-colors ${
                   errors.name
-                    ? "border-error-200 bg-error-50 focus:ring-error-500"
-                    : "border-gray-300 bg-white"
+                    ? "border-error bg-error-soft focus:border-error"
+                    : "border-border focus:border-ink"
                 }`}
               />
               {errors.name && (
-                <p className="mt-1.5 text-sm text-error-600 flex items-center gap-1">
+                <p className="mt-1.5 text-[13px] text-error flex items-center gap-1">
                   <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
                   </svg>
@@ -146,9 +143,9 @@ const ManualMedicineForm = ({
             <div>
               <label
                 htmlFor="activeSubstance"
-                className="block text-sm font-semibold text-gray-700 mb-2"
+                className="block text-[11px] uppercase tracking-[0.1em] text-muted font-medium mb-1.5"
               >
-                Substância ativa <span className="text-error-600">*</span>
+                Substância ativa <span className="text-error normal-case tracking-normal">*</span>
               </label>
               <input
                 type="text"
@@ -157,14 +154,14 @@ const ManualMedicineForm = ({
                 onChange={(e) => handleChange("activeSubstance", e.target.value)}
                 onBlur={() => handleBlur("activeSubstance")}
                 placeholder="Ex: Paracetamol"
-                className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors ${
+                className={`w-full bg-paper border rounded-lg px-3 py-2.5 text-[15px] text-ink placeholder:text-faint focus:outline-none transition-colors ${
                   errors.activeSubstance
-                    ? "border-error-200 bg-error-50 focus:ring-error-500"
-                    : "border-gray-300 bg-white"
+                    ? "border-error bg-error-soft focus:border-error"
+                    : "border-border focus:border-ink"
                 }`}
               />
               {errors.activeSubstance && (
-                <p className="mt-1.5 text-sm text-error-600 flex items-center gap-1">
+                <p className="mt-1.5 text-[13px] text-error flex items-center gap-1">
                   <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
                   </svg>
@@ -172,7 +169,7 @@ const ManualMedicineForm = ({
                 </p>
               )}
               {!errors.activeSubstance && (
-                <p className="mt-1 text-xs text-gray-400">
+                <p className="mt-1 text-[12px] text-muted">
                   Indicada na embalagem, geralmente junto ao nome
                 </p>
               )}
@@ -182,10 +179,10 @@ const ManualMedicineForm = ({
             <div>
               <label
                 htmlFor="brand"
-                className="block text-sm font-semibold text-gray-700 mb-2"
+                className="block text-[11px] uppercase tracking-[0.1em] text-muted font-medium mb-1.5"
               >
                 Marca{" "}
-                <span className="text-gray-400 font-normal text-xs">(opcional)</span>
+                <span className="normal-case tracking-normal text-faint font-normal">(opcional)</span>
               </label>
               <input
                 type="text"
@@ -193,7 +190,7 @@ const ManualMedicineForm = ({
                 value={formData.brand}
                 onChange={(e) => handleChange("brand", e.target.value)}
                 placeholder="Ex: Ben-u-ron, Genérico"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors"
+                className="w-full bg-paper border border-border rounded-lg px-3 py-2.5 text-[15px] text-ink placeholder:text-faint focus:border-ink focus:outline-none transition-colors"
               />
             </div>
 
@@ -201,10 +198,10 @@ const ManualMedicineForm = ({
             <div>
               <label
                 htmlFor="dosage"
-                className="block text-sm font-semibold text-gray-700 mb-2"
+                className="block text-[11px] uppercase tracking-[0.1em] text-muted font-medium mb-1.5"
               >
                 Dosagem{" "}
-                <span className="text-gray-400 font-normal text-xs">(opcional)</span>
+                <span className="normal-case tracking-normal text-faint font-normal">(opcional)</span>
               </label>
               <input
                 type="text"
@@ -212,22 +209,24 @@ const ManualMedicineForm = ({
                 value={formData.dosage}
                 onChange={(e) => handleChange("dosage", e.target.value)}
                 placeholder="Ex: 500 mg, 1 g"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors"
+                className="w-full bg-paper border border-border rounded-lg px-3 py-2.5 text-[15px] text-ink placeholder:text-faint focus:border-ink focus:outline-none transition-colors"
               />
-              <p className="mt-1 text-xs text-gray-400">
+              <p className="mt-1 text-[12px] text-muted">
                 Ajuda a distinguir entre embalagens diferentes do mesmo medicamento
               </p>
             </div>
 
-            {/* Info Box */}
-            <div className="bg-primary-50 border border-primary-100 rounded-lg p-4">
-              <div className="flex items-start gap-2">
-                <svg className="w-4 h-4 text-primary-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+            {/* Info note */}
+            <div className="bg-surface border border-rule rounded-lg px-4 py-3.5">
+              <div className="flex items-start gap-2.5">
+                <svg className="w-4 h-4 text-brand mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
                 </svg>
-                <div className="text-sm text-primary-800">
-                  <p className="font-medium mb-1">Só os dois primeiros campos são obrigatórios.</p>
-                  <p className="text-primary-700 font-light">
+                <div>
+                  <p className="text-[13px] text-ink font-medium mb-0.5">
+                    Só os dois primeiros campos são obrigatórios.
+                  </p>
+                  <p className="text-[13px] text-ink-2">
                     A marca e a dosagem ajudam a encontrar a versão certa se existirem várias embalagens.
                   </p>
                 </div>
@@ -235,36 +234,39 @@ const ManualMedicineForm = ({
             </div>
 
             {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row gap-3 pt-2">
-              <button
+            <div className="flex flex-col sm:flex-row gap-3 pt-1">
+              <Button
                 type="button"
+                variant="secondary"
                 onClick={onCancel}
-                className="flex-1 px-6 py-3 border border-gray-300 text-gray-600 font-medium rounded-lg hover:bg-gray-50 transition-colors"
+                className="flex-1"
               >
                 Voltar
-              </button>
-              <button
+              </Button>
+              <Button
                 type="submit"
-                className="flex-1 px-6 py-3 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 transition-colors shadow-lg hover:shadow-xl"
+                variant="primary"
+                className="flex-1"
               >
                 Procurar folheto
-              </button>
+              </Button>
             </div>
           </form>
         </div>
-
-        {/* Direct path back to landing */}
-        {onCancelToLanding && (
-          <div className="text-center mt-6">
-            <button
-              onClick={onCancelToLanding}
-              className="text-sm text-gray-500 hover:text-gray-700 font-medium"
-            >
-              Voltar ao início
-            </button>
-          </div>
-        )}
       </div>
+
+      {/* Direct path back to landing */}
+      {onCancelToLanding && (
+        <div className="text-center py-5 border-t border-rule">
+          <Button
+            type="button"
+            variant="link"
+            onClick={onCancelToLanding}
+          >
+            Voltar ao início
+          </Button>
+        </div>
+      )}
     </div>
   );
 };

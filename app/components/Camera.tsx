@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import Webcam from "react-webcam";
+import { Icon } from "./ui/Icon";
 
 interface CameraProps {
   onCapture: (imageSrc: string) => void;
@@ -10,6 +11,7 @@ interface CameraProps {
 const Camera = ({ onCapture, onCancel, onManualEntry }: CameraProps) => {
   const webcamRef = useRef<Webcam>(null);
   const [flash, setFlash] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const capture = () => {
     const imageSrc = webcamRef.current?.getScreenshot();
@@ -30,23 +32,54 @@ const Camera = ({ onCapture, onCancel, onManualEntry }: CameraProps) => {
     aspectRatio: 16 / 9,
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const result = ev.target?.result;
+      if (typeof result === "string") {
+        onCapture(result);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   return (
-    <div className="fixed inset-0 bg-black flex flex-col z-50">
+    <div className="fixed inset-0 flex flex-col z-50" style={{ background: "#0E0D0B", fontFamily: "var(--font-sans)" }}>
+      {/* Hidden file input for "Usar foto existente" */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+
       {/* Top bar */}
-      <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-4 pt-[env(safe-area-inset-top)] h-16">
-        {onCancel && (
+      <div
+        className="flex items-center justify-between px-[18px] pt-[env(safe-area-inset-top)] z-20"
+        style={{ paddingTop: `calc(env(safe-area-inset-top) + 14px)`, paddingBottom: 12, background: "rgba(14,13,11,0.6)" }}
+      >
+        {onCancel ? (
           <button
             onClick={onCancel}
-            className="min-h-[44px] min-w-[44px] flex items-center justify-center text-white/80 hover:text-white"
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center text-white/85 hover:text-white"
             aria-label="Fechar"
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <Icon.close className="w-[18px] h-[18px]" />
           </button>
+        ) : (
+          <span className="w-[44px]" />
         )}
-        <span className="text-white/60 text-sm font-medium">Enquadre a embalagem</span>
-        <div className="w-11" /> {/* Spacer for centering */}
+
+        <span className="flex items-center gap-1.5" style={{ fontFamily: "var(--font-serif)", fontSize: 16, fontWeight: 500, color: "#fff", letterSpacing: "-0.005em" }}>
+          <Icon.dot className="text-accent w-[6px] h-[6px] flex-shrink-0" />
+          Aponte à embalagem
+        </span>
+
+        {/* Spacer to keep title centered */}
+        <span className="w-[44px]" />
       </div>
 
       {/* Viewfinder */}
@@ -59,30 +92,53 @@ const Camera = ({ onCapture, onCancel, onManualEntry }: CameraProps) => {
           screenshotQuality={0.95}
         />
 
-        {/* SVG framing guide */}
+        {/* Overlays */}
         <div className="absolute inset-0 pointer-events-none">
-          <svg className="w-full h-full" viewBox="0 0 400 600" preserveAspectRatio="xMidYMid slice">
-            {/* Dimmed overlay with cutout */}
-            <defs>
-              <mask id="cutout">
-                <rect width="400" height="600" fill="white" />
-                <rect x="40" y="150" width="320" height="300" rx="20" fill="black" />
-              </mask>
-            </defs>
-            <rect width="400" height="600" fill="rgba(0,0,0,0.4)" mask="url(#cutout)" />
+          {/* Radial hint texture */}
+          <div
+            className="absolute inset-0"
+            style={{ background: "radial-gradient(circle at 50% 50%, rgba(255,255,255,0.04) 0%, transparent 70%)" }}
+          />
 
-            {/* Corner brackets */}
-            <g stroke="white" strokeWidth="3" fill="none" strokeLinecap="round">
+          {/* Faint dashed box silhouette */}
+          <div
+            className="absolute"
+            style={{
+              left: "50%",
+              top: "46%",
+              transform: "translate(-50%, -50%)",
+              width: 180,
+              height: 220,
+              background: "rgba(255,255,255,0.02)",
+              border: "1px dashed rgba(255,255,255,0.12)",
+            }}
+          />
+
+          {/* Corner brackets in amber (--color-accent) */}
+          <svg
+            className="absolute inset-0 w-full h-full"
+            viewBox="0 0 390 600"
+            preserveAspectRatio="none"
+          >
+            <g stroke="var(--color-accent)" strokeWidth="2.5" fill="none" strokeLinecap="round">
               {/* Top-left */}
-              <path d="M60 170 L60 160 Q60 150 70 150 L90 150" />
+              <path d="M85 170 L85 158 L97 158" />
               {/* Top-right */}
-              <path d="M340 170 L340 160 Q340 150 330 150 L310 150" />
+              <path d="M305 170 L305 158 L293 158" />
               {/* Bottom-left */}
-              <path d="M60 430 L60 440 Q60 450 70 450 L90 450" />
+              <path d="M85 430 L85 442 L97 442" />
               {/* Bottom-right */}
-              <path d="M340 430 L340 440 Q340 450 330 450 L310 450" />
+              <path d="M305 430 L305 442 L293 442" />
             </g>
           </svg>
+
+          {/* Helper text — privacy reassurance */}
+          <div
+            className="absolute left-6 right-6 text-center"
+            style={{ top: 470, color: "rgba(255,255,255,0.65)", fontSize: 12, lineHeight: 1.5 }}
+          >
+            A foto fica entre nós. Não é guardada.
+          </div>
         </div>
 
         {/* Flash overlay */}
@@ -92,30 +148,43 @@ const Camera = ({ onCapture, onCancel, onManualEntry }: CameraProps) => {
       </div>
 
       {/* Bottom controls */}
-      <div className="flex-shrink-0 bg-black/80 pb-[env(safe-area-inset-bottom)]">
-        <div className="flex items-center justify-center py-6 gap-8">
-          {/* Manual entry link */}
-          {(onManualEntry || onCancel) && (
-            <button
-              onClick={onManualEntry ?? onCancel}
-              className="text-white/60 text-xs font-medium hover:text-white/80 min-h-[44px] flex items-center"
-            >
-              Introduzir<br/>manualmente
-            </button>
-          )}
+      <div
+        className="flex-shrink-0 flex items-center justify-between px-6 z-20"
+        style={{
+          paddingTop: 20,
+          paddingBottom: `calc(env(safe-area-inset-bottom) + 32px)`,
+          background: "rgba(14,13,11,0.6)",
+        }}
+      >
+        {/* Left: Procurar pelo nome → onManualEntry */}
+        <button
+          onClick={onManualEntry ?? onCancel}
+          className="min-h-[44px] flex items-center justify-start"
+          style={{ fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 500, color: "rgba(255,255,255,0.7)", textAlign: "left", lineHeight: 1.3 }}
+          aria-label="Procurar pelo nome"
+        >
+          Procurar<br />pelo nome
+        </button>
 
-          {/* Capture button */}
-          <button
-            onClick={capture}
-            className="w-[72px] h-[72px] rounded-full border-4 border-white flex items-center justify-center active:scale-90 transition-transform"
-            aria-label="Capturar"
-          >
-            <div className="w-[60px] h-[60px] rounded-full bg-white active:bg-gray-200 transition-colors" />
-          </button>
+        {/* Center: Capture button */}
+        <button
+          onClick={capture}
+          className="w-[72px] h-[72px] rounded-full flex items-center justify-center active:scale-90 transition-transform"
+          style={{ border: "3px solid #fff", background: "transparent" }}
+          aria-label="Capturar foto"
+        >
+          <span className="w-[58px] h-[58px] rounded-full bg-white" />
+        </button>
 
-          {/* Spacer for centering */}
-          <div className="w-16" />
-        </div>
+        {/* Right: Usar foto existente → file picker */}
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="min-h-[44px] flex items-center justify-end"
+          style={{ fontFamily: "var(--font-sans)", fontSize: 12, fontWeight: 500, color: "rgba(255,255,255,0.7)", textAlign: "right", lineHeight: 1.3 }}
+          aria-label="Usar foto existente"
+        >
+          Usar foto<br />existente
+        </button>
       </div>
     </div>
   );

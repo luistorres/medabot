@@ -1,5 +1,7 @@
 import { IdentifyMedicineResponse } from "../core/identify";
 import Button from "./ui/Button";
+import { Wordmark } from "./ui/Wordmark";
+import { Icon } from "./ui/Icon";
 import { classifyProcessingError } from "../utils/classifyProcessingError";
 
 interface Step {
@@ -23,31 +25,88 @@ interface ProcessingScreenProps {
   onReset: () => void;
 }
 
-const CheckIcon = () => (
-  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-  </svg>
-);
+// ─── StepDot ────────────────────────────────────────────────
+type StepState = "done" | "active" | "pending" | "failed";
 
-const SpinnerIcon = () => (
-  <div className="animate-spin rounded-full h-5 w-5 border-2 border-white/30 border-t-white" />
-);
+function StepDot({ state }: { state: StepState }) {
+  if (state === "done") {
+    return (
+      <span className="w-[22px] h-[22px] rounded-full bg-brand flex items-center justify-center flex-shrink-0">
+        <Icon.check className="w-3 h-3 text-white" />
+      </span>
+    );
+  }
+  if (state === "active") {
+    return (
+      <span className="w-[22px] h-[22px] rounded-full border-2 border-brand flex items-center justify-center flex-shrink-0">
+        <span className="w-2 h-2 rounded-full bg-brand animate-pulse-dot" />
+      </span>
+    );
+  }
+  if (state === "failed") {
+    return (
+      <span className="w-[22px] h-[22px] rounded-full bg-error flex items-center justify-center flex-shrink-0">
+        <Icon.close className="w-3 h-3 text-white" />
+      </span>
+    );
+  }
+  // pending
+  return (
+    <span className="w-[22px] h-[22px] rounded-full border-2 border-dashed border-faint flex-shrink-0" />
+  );
+}
 
-const XIcon = () => (
-  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-  </svg>
-);
+// ─── Row definitions: 5 step ids → 4 visual rows ────────────
+interface RowDef {
+  /** Primary step id for this row (used for active/failed matching) */
+  id: string;
+  /** Extra ids that count as "this row" (for row 4: overview+ready) */
+  extraIds?: string[];
+  label: string;
+}
 
+const ROW_DEFS: RowDef[] = [
+  { id: "identify", label: "A identificar o medicamento" },
+  { id: "fetch",    label: "A obter o folheto oficial" },
+  { id: "process",  label: "A ler o folheto" },
+  { id: "overview", extraIds: ["ready"], label: "A preparar o resumo" },
+];
+
+function getRowState(
+  row: RowDef,
+  currentStep: string,
+  completedSteps: string[],
+  failedStep: string,
+): StepState {
+  const allIds = [row.id, ...(row.extraIds ?? [])];
+
+  // failed: failedStep is one of this row's ids
+  if (allIds.includes(failedStep)) return "failed";
+
+  // done: for row 4, done only when `ready` is in completedSteps;
+  //       for others, done when primary id is completed
+  if (row.id === "overview") {
+    if (completedSteps.includes("ready")) return "done";
+  } else {
+    if (completedSteps.includes(row.id)) return "done";
+  }
+
+  // active: currentStep is any of this row's ids
+  if (allIds.includes(currentStep)) return "active";
+
+  return "pending";
+}
+
+// ─── ProcessingScreen ────────────────────────────────────────
 const ProcessingScreen = ({
-  steps,
+  steps: _steps,
   currentStep,
   completedSteps,
   medicineInfo,
   processingError,
   failedStep,
-  loading,
-  searchMessage,
+  loading: _loading,
+  searchMessage: _searchMessage,
   onRetryStep,
   onGoToCamera,
   onGoToManualForm,
@@ -55,171 +114,152 @@ const ProcessingScreen = ({
 }: ProcessingScreenProps) => {
   const classified = processingError ? classifyProcessingError(processingError) : null;
 
+  const subtitle = [
+    medicineInfo?.activeSubstance,
+    medicineInfo?.dosage,
+    medicineInfo?.pharmaceuticalForm,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   return (
-    <div className="min-h-screen bg-mesh-landing flex items-center justify-center p-6 relative overflow-hidden">
-      {/* Decorative floating orbs */}
-      <div className="absolute top-24 right-6 w-32 h-32 rounded-full bg-accent-400/10 blur-2xl animate-float" />
-      <div className="absolute bottom-32 left-8 w-40 h-40 rounded-full bg-primary-400/8 blur-3xl animate-float stagger-3" />
+    <div className="min-h-screen bg-bg flex flex-col">
+      {/* ── Header ── */}
+      <header className="flex items-center justify-between px-6 py-4 border-b border-rule">
+        <button
+          onClick={onReset}
+          className="text-ink-2 flex items-center"
+          aria-label="Fechar"
+        >
+          <Icon.close className="w-[18px] h-[18px]" />
+        </button>
+        <Wordmark size={14} />
+        {/* spacer to balance the close icon */}
+        <span className="w-[18px]" />
+      </header>
 
-      <div className="max-w-lg w-full space-y-4 relative z-10">
-        {/* Medicine Info Card - shows once identified */}
-        {medicineInfo && (completedSteps.includes("identify") || medicineInfo.name) && medicineInfo.name && (
-          <div className="glass rounded-2xl ring-1 ring-gray-200/60 shadow-sm p-5 animate-stagger-in stagger-1">
-            <div className="flex items-start gap-3.5">
-              <div className="w-11 h-11 rounded-xl bg-primary-100/80 flex items-center justify-center flex-shrink-0">
-                <svg className="w-5 h-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0112 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5" />
-                </svg>
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="font-700 text-gray-900 text-base tracking-tight">{medicineInfo.name}</h3>
-                <p className="text-sm text-gray-500 mt-0.5 font-light">{medicineInfo.activeSubstance}</p>
+      {/* ── Body ── */}
+      <div className="flex flex-col flex-1 px-6 overflow-y-auto">
+        {/* Title block */}
+        <div className="pt-7 pb-2">
+          <p className="text-[11px] uppercase tracking-[0.12em] text-brand mb-2.5">
+            A Processar
+          </p>
+          <h1 className="font-serif text-[28px] font-normal leading-[1.1] tracking-[-0.015em] text-ink m-0">
+            A ler o folheto.<br />Demora uns segundos.
+          </h1>
+        </div>
 
-                {(medicineInfo.dosage || medicineInfo.pharmaceuticalForm || medicineInfo.titular) && (
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {medicineInfo.pharmaceuticalForm && (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md">
-                        <svg className="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 0 1-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 0 1 4.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0 1 12 15a9.065 9.065 0 0 0-6.23.693L5 14.5m14.8.8 1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0 1 12 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5" />
-                        </svg>
-                        {medicineInfo.pharmaceuticalForm}
-                      </span>
-                    )}
-                    {medicineInfo.dosage && (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md">
-                        <svg className="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v17.25m0 0c-1.472 0-2.882.265-4.185.75M12 20.25c1.472 0 2.882.265 4.185.75M18.75 4.97A48.416 48.416 0 0 0 12 4.5c-2.291 0-4.545.16-6.75.47m13.5 0c1.01.143 2.01.317 3 .52m-3-.52 2.62 10.726c.122.499-.106 1.028-.589 1.202a5.988 5.988 0 0 1-2.031.352 5.988 5.988 0 0 1-2.031-.352c-.483-.174-.711-.703-.59-1.202L18.75 4.971zm-16.5.52c.99-.203 1.99-.377 3-.52m0 0 2.62 10.726c.122.499-.106 1.028-.589 1.202a5.989 5.989 0 0 1-2.031.352 5.989 5.989 0 0 1-2.031-.352c-.483-.174-.711-.703-.59-1.202L5.25 4.971z" />
-                        </svg>
-                        {medicineInfo.dosage}
-                      </span>
-                    )}
-                    {medicineInfo.titular && (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md">
-                        <svg className="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3H21m-3.75 3H21" />
-                        </svg>
-                        {medicineInfo.titular}
-                      </span>
-                    )}
-                  </div>
+        {/* Identified-medicine card */}
+        {medicineInfo?.name && (
+          <div className="mt-5 bg-paper rounded-xl p-4 flex gap-4 border border-border">
+            {/* Box silhouette */}
+            <div className="w-16 h-20 rounded-[6px] bg-gradient-to-b from-[#FBFBFB] to-[#F0EDE6] border border-border flex-shrink-0 flex flex-col pt-[6px] px-[6px]">
+              <div className="w-[28px] h-[3px] bg-brand rounded-sm mb-1" />
+            </div>
+            {/* Info */}
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] uppercase tracking-[0.12em] text-brand mb-1">
+                Identificado
+              </p>
+              <h3 className="font-serif text-[18px] font-[500] leading-tight tracking-[-0.005em] text-ink m-0">
+                {medicineInfo.name}
+              </h3>
+              {subtitle && (
+                <p className="font-mono text-[12px] text-muted mt-0.5 m-0">
+                  {subtitle}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Steps list */}
+        <div className="mt-3 flex flex-col">
+          {ROW_DEFS.map((row) => {
+            const state = getRowState(row, currentStep, completedSteps, failedStep);
+            const isPending = state === "pending";
+
+            return (
+              <div
+                key={row.id}
+                className="border-b border-rule py-3.5 flex items-center gap-3"
+              >
+                <StepDot state={state} />
+                <span
+                  className={`text-[14px] flex-1 ${isPending ? "text-muted" : "text-ink"}`}
+                >
+                  {row.label}
+                </span>
+                {state === "active" && (
+                  <span className="font-mono text-[11px] text-brand">
+                    em curso
+                  </span>
+                )}
+                {state === "done" && (
+                  <Icon.check className="text-brand w-3 h-3" />
                 )}
               </div>
-            </div>
-          </div>
-        )}
+            );
+          })}
+        </div>
 
-        {/* Processing Steps — visible while loading OR when there's an error (so the user sees which step failed) */}
-        {(loading || (processingError && failedStep)) && (
-          <div className="glass rounded-2xl ring-1 ring-gray-200/60 shadow-sm p-5 animate-stagger-in stagger-2">
-            <div className="space-y-3.5">
-              {steps.map((step) => {
-                const isCompleted = completedSteps.includes(step.id);
-                const isCurrent = currentStep === step.id;
-                const isFailed = failedStep === step.id;
+        {/* Error recovery block */}
+        {classified && failedStep && (
+          <div className="mt-5 flex flex-col gap-3">
+            {/* Error message */}
+            <p className="text-[14px] text-error m-0">
+              {classified.message}
+            </p>
 
-                let iconBg = "bg-gray-100/80 text-gray-400";
-                let labelClass = "text-gray-400 font-light";
-                let iconContent: React.ReactNode = step.icon;
-
-                if (isFailed) {
-                  iconBg = "bg-error-100 text-error-600";
-                  labelClass = "text-error-700 font-medium";
-                  iconContent = <XIcon />;
-                } else if (isCompleted) {
-                  iconBg = "bg-accent-500 text-white shadow-sm shadow-accent-500/30";
-                  labelClass = "text-accent-700 font-medium";
-                  iconContent = <CheckIcon />;
-                } else if (isCurrent) {
-                  iconBg = "bg-primary-600 text-white shadow-sm shadow-primary-600/30";
-                  labelClass = "text-primary-700 font-medium";
-                  iconContent = <SpinnerIcon />;
-                }
-
-                return (
-                  <div key={step.id} className="flex items-center gap-3.5">
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300 ${iconBg}`}>
-                      {iconContent}
-                    </div>
-                    <span className={`text-sm flex-1 ${labelClass}`}>
-                      {isCurrent && searchMessage ? searchMessage : step.label}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Error Display */}
-        {classified && (
-          <div className="glass rounded-2xl ring-1 ring-error-200/60 shadow-sm p-5 animate-fade-in">
-            <div className="flex items-start gap-3.5 mb-5">
-              <div className="w-10 h-10 rounded-full bg-error-100 flex items-center justify-center flex-shrink-0">
-                <svg className="w-5 h-5 text-error-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-                </svg>
-              </div>
-              <div className="flex-1">
-                <h4 className="font-700 text-error-700 tracking-tight">{classified.title}</h4>
-                <p className="text-sm text-error-700 mt-1 font-light">{classified.message}</p>
-              </div>
-            </div>
-
-            {/* Primary action — contextual per error kind */}
-            {classified.primaryAction === "retry" && failedStep && (
-              <Button
-                variant="primary"
-                fullWidth
-                onClick={() => onRetryStep(failedStep)}
-                className="mb-3 shadow-lg shadow-primary-600/25"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
-                </svg>
+            {/* Primary action */}
+            {classified.primaryAction === "retry" && (
+              <Button fullWidth onClick={() => onRetryStep(failedStep)}>
                 Tentar novamente
               </Button>
             )}
-
             {classified.primaryAction === "search" && (
-              <Button
-                variant="primary"
-                fullWidth
-                onClick={onGoToManualForm}
-                className="mb-3 shadow-lg shadow-primary-600/25"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-                </svg>
-                Pesquisa avançada
+              <Button fullWidth onClick={onGoToManualForm}>
+                Procurar pelo nome
               </Button>
             )}
 
-            <div className="border-t border-gray-200/60 pt-4">
-              <p className="text-[13px] text-gray-500 mb-3 font-light">Outras opções:</p>
-              <div className="grid grid-cols-2 gap-2.5">
-                {classified.primaryAction !== "retry" && failedStep && (
-                  <Button variant="secondary" onClick={() => onRetryStep(failedStep)}>
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
-                    </svg>
-                    Tentar de novo
-                  </Button>
-                )}
-                <Button variant="secondary" onClick={onGoToCamera}>
-                  Usar câmara
+            {/* Secondary actions */}
+            <div className="flex flex-col gap-2">
+              {/* Show retry as secondary if primary was search */}
+              {classified.primaryAction !== "retry" && (
+                <Button variant="secondary" fullWidth onClick={() => onRetryStep(failedStep)}>
+                  Tentar novamente
                 </Button>
-                {classified.primaryAction === "retry" && (
-                  <Button variant="secondary" onClick={onGoToManualForm}>
-                    Pesquisa avançada
-                  </Button>
-                )}
-              </div>
-              <Button variant="ghost" fullWidth onClick={onReset} className="mt-2">
-                Voltar ao início
+              )}
+
+              {/* Camera always available */}
+              <Button variant="secondary" fullWidth onClick={onGoToCamera}>
+                Fotografar
+              </Button>
+
+              {/* Show search as secondary if primary was retry */}
+              {classified.primaryAction === "retry" && (
+                <Button variant="secondary" fullWidth onClick={onGoToManualForm}>
+                  Procurar pelo nome
+                </Button>
+              )}
+
+              {/* Always present reset link */}
+              <Button variant="link" onClick={onReset}>
+                Recomeçar
               </Button>
             </div>
           </div>
         )}
+
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* Footer caption */}
+        <p className="text-center text-muted text-[13px] mt-6 mb-6">
+          As respostas aparecem em segundos. Não saímos do folheto oficial.
+        </p>
       </div>
     </div>
   );

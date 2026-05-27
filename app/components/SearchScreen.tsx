@@ -2,14 +2,29 @@ import { useState } from "react";
 import { IdentifyMedicineResponse } from "../core/identify";
 import { parseSearchInput } from "../server/parseSearchInput";
 import Button from "./ui/Button";
+import { Wordmark } from "./ui/Wordmark";
+import { Icon } from "./ui/Icon";
 
 interface SearchScreenProps {
   onSubmit: (data: IdentifyMedicineResponse) => void;
   onCancel: () => void;
   onAdvancedSearch: () => void;
+  onOpenCamera?: () => void;
 }
 
-const SearchScreen = ({ onSubmit, onCancel, onAdvancedSearch }: SearchScreenProps) => {
+const EXAMPLES = [
+  { name: "Ben-U-Ron 1000 mg", sub: "Paracetamol" },
+  { name: "Brufen 600 mg", sub: "Ibuprofeno" },
+  { name: "Aspirina 500 mg", sub: "Ácido acetilsalicílico" },
+  { name: "Voltaren Emulgel", sub: "Diclofenac" },
+];
+
+const SearchScreen = ({
+  onSubmit,
+  onCancel,
+  onAdvancedSearch,
+  onOpenCamera,
+}: SearchScreenProps) => {
   const [query, setQuery] = useState("");
   const [parsing, setParsing] = useState(false);
 
@@ -34,88 +49,114 @@ const SearchScreen = ({ onSubmit, onCancel, onAdvancedSearch }: SearchScreenProp
   };
 
   return (
-    <div className="min-h-screen bg-mesh-landing flex flex-col relative overflow-hidden">
-      {/* Decorative floating orbs */}
-      <div className="absolute top-20 left-6 w-36 h-36 rounded-full bg-primary-400/8 blur-3xl animate-float" />
-      <div className="absolute bottom-40 right-8 w-28 h-28 rounded-full bg-accent-400/10 blur-2xl animate-float stagger-3" />
+    <div className="min-h-screen bg-bg flex flex-col">
+      {/* Mobile header */}
+      <header className="flex items-center justify-between px-4 py-3 border-b border-rule">
+        <button
+          onClick={onCancel}
+          className="min-h-[44px] min-w-[44px] flex items-center justify-center text-ink-2 hover:text-ink transition-colors"
+          aria-label="Voltar"
+        >
+          <Icon.back className="w-5 h-5" />
+        </button>
+        <Wordmark size={16} />
+        {/* Spacer to balance the header */}
+        <span className="w-[44px]" />
+      </header>
 
-      <div className="flex-1 flex flex-col px-7 pt-14 pb-10 relative z-10 md:items-center md:justify-center md:pt-0">
-        {/* Back button */}
-        <div className="animate-stagger-in stagger-1 md:absolute md:top-6 md:left-8">
-          <button
-            onClick={onCancel}
-            className="min-h-[44px] min-w-[44px] flex items-center gap-2 text-gray-400 hover:text-gray-700 transition-colors mb-8 md:mb-0"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-            </svg>
-            <span className="text-sm font-medium">Voltar</span>
-          </button>
+      {/* Hero block */}
+      <div className="px-6 pt-7 pb-4">
+        <p className="text-[11px] uppercase tracking-[0.12em] text-brand font-medium mb-2.5">
+          PROCURAR
+        </p>
+        <h1
+          className="font-serif text-[32px] font-normal leading-[1.05] tracking-[-0.02em] text-ink mb-2"
+          style={{ textWrap: "pretty" } as React.CSSProperties}
+        >
+          Que medicamento quer consultar?
+        </h1>
+        <p className="text-[14px] leading-[1.5] text-ink-2">
+          Escreva o nome, a substância ativa ou a dosagem. Combine para
+          resultados mais precisos.
+        </p>
+      </div>
+
+      {/* Search input */}
+      <div className="px-6 pt-2 pb-4">
+        <div className="flex items-center gap-2.5 bg-paper border border-ink rounded-lg px-[14px] py-[10px] focus-within:ring-2 focus-within:ring-brand/30 transition-shadow">
+          <Icon.search className="w-[18px] h-[18px] text-ink-2 flex-shrink-0" />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+            placeholder="Ben-u-ron 500 mg"
+            className="flex-1 text-[15px] text-ink bg-transparent border-none outline-none placeholder:text-muted py-1 min-h-0"
+            autoFocus
+            disabled={parsing}
+          />
+          {parsing && (
+            <div className="w-4 h-4 rounded-full border-2 border-brand/30 border-t-brand animate-spin flex-shrink-0" />
+          )}
         </div>
 
-        {/* Title section */}
-        <div className="mb-8 animate-stagger-in stagger-2 md:text-center">
-          <h2 className="text-[1.75rem] font-800 text-gray-900 tracking-tight leading-none mb-2">
-            Pesquisar <span className="text-primary-600">medicamento</span>
-          </h2>
-          <p className="text-[15px] text-gray-400 font-light leading-relaxed">
-            Escreva o nome do medicamento, a substância ativa ou a dosagem
-          </p>
-        </div>
-
-        {/* Search content */}
-        <div className="w-full max-w-md md:max-w-lg animate-stagger-in stagger-3">
-          {/* Search input with glass effect */}
-          <div className="flex gap-2.5 mb-5">
-            <div className="flex-1 glass rounded-2xl ring-1 ring-gray-200/60 shadow-sm focus-within:ring-2 focus-within:ring-primary-500 focus-within:shadow-md transition-all">
-              <input
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                placeholder="Ex: Paracetamol 500mg, Ben-u-ron..."
-                className="w-full min-h-[52px] px-5 text-[15px] bg-transparent border-none focus:outline-none placeholder:text-gray-300"
-                autoFocus
-                disabled={parsing}
-              />
-            </div>
-            <Button onClick={handleSearch} disabled={!query.trim() || parsing} className="!rounded-2xl !px-4 !min-h-[52px] shadow-lg shadow-primary-600/25">
-              {parsing ? (
-                <div className="animate-spin rounded-full h-5 w-5 border-2 border-white/30 border-t-white" />
-              ) : (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-                </svg>
-              )}
-            </Button>
-          </div>
-
+        <div className="mt-2.5">
           <button
             onClick={onAdvancedSearch}
-            className="text-[13px] text-primary-600 hover:text-primary-700 font-medium transition-colors md:w-full md:text-center"
+            className="text-[12.5px] text-ink-2 underline underline-offset-[3px] decoration-faint hover:decoration-ink-2 hover:text-ink transition-colors"
           >
-            Mais opções de pesquisa →
+            Procurar com mais detalhe →
           </button>
+        </div>
+      </div>
 
-          {/* Search hints / empty state */}
-          <div className="mt-10 space-y-3 animate-stagger-in stagger-4 md:text-center">
-            <p className="text-[11px] font-medium text-gray-300 uppercase tracking-widest">Exemplos de pesquisa</p>
-            <div className="flex flex-wrap gap-2 md:justify-center">
-              {["Ben-u-ron 1000mg", "Brufen 600mg", "Amoxicilina 500mg"].map((hint) => (
-                <button
-                  key={hint}
-                  onClick={() => setQuery(hint)}
-                  className="px-3.5 py-2 text-[13px] text-gray-500 glass rounded-xl ring-1 ring-gray-200/60 hover:bg-white/80 hover:text-gray-700 transition-all"
-                >
-                  {hint}
-                </button>
-              ))}
-            </div>
-            <p className="text-[12px] text-gray-400 leading-relaxed pt-2">
-              Pode pesquisar pelo nome comercial, substância ativa ou dosagem —
-              ou combine-os para um resultado mais preciso.
-            </p>
-          </div>
+      {/* Examples section */}
+      <div className="px-6 pt-3 pb-4 border-t border-rule">
+        <p className="text-[11px] uppercase tracking-[0.12em] text-muted font-medium mb-3">
+          TENTE, POR EXEMPLO
+        </p>
+        <div className="flex flex-col">
+          {EXAMPLES.map((ex, i) => (
+            <button
+              key={ex.name}
+              onClick={() => setQuery(ex.name)}
+              className={
+                "w-full flex justify-between items-center py-3 text-left border-b border-rule hover:bg-tint transition-colors -mx-2 px-2 rounded" +
+                (i === 0 ? " border-t border-rule" : "")
+              }
+              disabled={parsing}
+            >
+              <div>
+                <div className="font-serif text-[17px] font-medium text-ink tracking-[-0.005em] leading-snug">
+                  {ex.name}
+                </div>
+                <div className="text-[12px] text-muted mt-0.5">{ex.sub}</div>
+              </div>
+              <Icon.chevron className="w-[14px] h-[14px] text-faint flex-shrink-0 ml-3" />
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Spacer */}
+      <div className="flex-1" />
+
+      {/* Camera hint card (always rendered) */}
+      <div className="px-6 pb-6 pt-4 border-t border-rule">
+        <div className="flex items-center gap-3 bg-surface border border-border rounded-lg p-4">
+          <Icon.camera className="w-5 h-5 text-brand flex-shrink-0" />
+          <span className="flex-1 text-[14px] font-medium text-ink">
+            Tem a caixa em mãos?
+          </span>
+          <Button
+            variant="link"
+            size="sm"
+            onClick={() => onOpenCamera?.()}
+            className="text-[14px] font-medium"
+          >
+            Fotografar
+          </Button>
+          <Icon.arrow className="w-[14px] h-[14px] text-faint flex-shrink-0" />
         </div>
       </div>
     </div>
