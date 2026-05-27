@@ -87,9 +87,19 @@ function getRowState(
   //       for others, done when primary id is completed
   if (row.id === "overview") {
     if (completedSteps.includes("ready")) return "done";
-  } else {
-    if (completedSteps.includes(row.id)) return "done";
+    // Stay active through the overview→ready transition: active while
+    // currentStep is overview/ready, OR after overview completes but
+    // before ready is marked (avoids a transient "pending" flash).
+    if (
+      allIds.includes(currentStep) ||
+      (completedSteps.includes("overview") && !completedSteps.includes("ready"))
+    ) {
+      return "active";
+    }
+    return "pending";
   }
+
+  if (completedSteps.includes(row.id)) return "done";
 
   // active: currentStep is any of this row's ids
   if (allIds.includes(currentStep)) return "active";
@@ -128,7 +138,7 @@ const ProcessingScreen = ({
       <header className="flex items-center justify-between px-6 py-4 border-b border-rule">
         <button
           onClick={onReset}
-          className="text-ink-2 flex items-center"
+          className="text-ink-2 flex items-center justify-center min-w-[40px] min-h-[40px] -ml-2"
           aria-label="Fechar"
         >
           <Icon.close className="w-[18px] h-[18px]" />

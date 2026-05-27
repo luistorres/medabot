@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 
 /**
  * Cycles through a list of placeholder strings while `active` is true,
@@ -14,11 +14,6 @@ export function useRotatingPlaceholder(
   intervalMs = 4500
 ): string {
   const [index, setIndex] = useState(0);
-  const indexRef = useRef(0);
-
-  useEffect(() => {
-    indexRef.current = index;
-  }, [index]);
 
   useEffect(() => {
     if (!active || options.length <= 1) return;

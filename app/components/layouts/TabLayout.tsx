@@ -49,12 +49,14 @@ const TabLayout = ({
         className="flex-shrink-0 bg-surface border-t border-border"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
-        <div className="flex">
+        <div className="flex" role="tablist">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
+                role="tab"
+                aria-selected={isActive}
                 onClick={() => {
                   setActiveTab(tab.id);
                   if (tab.id === "chat") setCameFromChat(false);

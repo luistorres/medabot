@@ -79,6 +79,15 @@ const Chat = ({
   const [suggestions, setSuggestions] = useState<string[]>(STATIC_SUGGESTIONS);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  // Guards against out-of-order / post-unmount suggestion updates.
+  const suggestionRequestId = useRef(0);
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   const { jumpToPage } = usePDF();
   const isDesktop = useMediaQuery("(min-width: 64rem)");
@@ -110,16 +119,22 @@ const Chat = ({
 
   // Refresh suggested follow-up questions after each assistant answer.
   const refreshSuggestions = async (lastAnswer: string) => {
+    const requestId = ++suggestionRequestId.current;
+    // Only apply if this is still the latest request and we're mounted.
+    const isStale = () =>
+      !isMounted.current || requestId !== suggestionRequestId.current;
     try {
       const result = await suggestFollowUps({
         data: { lastAnswer, medicineName },
       });
+      if (isStale()) return;
       if (Array.isArray(result) && result.length > 0) {
         setSuggestions(result);
       } else {
         setSuggestions(STATIC_SUGGESTIONS);
       }
     } catch {
+      if (isStale()) return;
       setSuggestions(STATIC_SUGGESTIONS);
     }
   };
@@ -224,7 +239,7 @@ const Chat = ({
             {onBack ? (
               <button
                 onClick={onBack}
-                className="flex items-center text-ink-2 hover:text-ink transition-colors"
+                className="flex items-center justify-center min-w-[40px] min-h-[40px] -ml-2 text-ink-2 hover:text-ink transition-colors"
                 aria-label="Voltar"
               >
                 <Icon.back className="w-[18px] h-[18px]" />

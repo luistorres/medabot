@@ -37,10 +37,10 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     },
     ref
   ) => {
+    const sizeClasses = variant === "link" ? "" : sizes[size];
     const composed =
       base +
-      " " +
-      sizes[size] +
+      (sizeClasses ? " " + sizeClasses : "") +
       " " +
       variants[variant] +
       (fullWidth ? " w-full" : "") +

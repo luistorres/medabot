@@ -95,8 +95,18 @@ const SearchScreen = ({
             autoFocus
             disabled={parsing}
           />
-          {parsing && (
+          {parsing ? (
             <div className="w-4 h-4 rounded-full border-2 border-brand/30 border-t-brand animate-spin flex-shrink-0" />
+          ) : (
+            <button
+              type="button"
+              onClick={handleSearch}
+              disabled={parsing || !query.trim()}
+              className="flex items-center justify-center min-w-[40px] min-h-[40px] -mr-2 rounded-lg bg-brand text-white hover:bg-brand-deep disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+              aria-label="Procurar"
+            >
+              <Icon.arrow className="w-[18px] h-[18px]" />
+            </button>
           )}
         </div>
 
