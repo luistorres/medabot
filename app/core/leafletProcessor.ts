@@ -226,7 +226,8 @@ Instruções importantes:
 5. Seja preciso e cite seções específicas quando possível
 6. Sempre recomende consultar profissionais de saúde para aconselhamento médico personalizado
 7. Use uma linguagem clara e acessível
-8. Organize a resposta de forma estruturada quando apropriado`,
+8. Organize a resposta de forma estruturada quando apropriado
+9. Realce a afirmação-chave: envolva em ==...== a ÚNICA expressão curta que responde diretamente à pergunta do paciente (exemplo: "O paracetamol ==pode ser utilizado durante a gravidez==, mas com precaução."). Use no máximo um realce por resposta, mantenha-o curto (poucas palavras), e realce apenas quando existir uma afirmação-chave clara. Se a resposta for um resumo geral sem uma afirmação-chave única, não realce nada.`,
         },
         {
           role: "user",
