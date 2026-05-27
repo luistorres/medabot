@@ -3,6 +3,7 @@ import { getCachedPdf, setCachedPdf, deleteCachedPdf } from "./db";
 import { stringSimilarity } from "./textUtils";
 import { searchMedicinesLocally } from "./localSearch";
 import { warmupPlaywright, consumeWarmInstance } from "./playwrightPool";
+import { searchEMA, downloadEMAPdf } from "./emaFallback";
 
 export interface SearchCandidate {
   name: string;
@@ -268,6 +269,7 @@ export interface RegulatoryPDFResult {
   candidates?: SearchCandidate[];
   confidence: number;
   matchedMedicine?: MatchedMedicineInfo;
+  source?: "infarmed" | "ema";
 }
 
 // Build search strategies dynamically based on available input fields.
@@ -331,27 +333,89 @@ export async function regulatoryPDF(
       ? `${normalizedName}|${normalizedDosage}`
       : normalizedName;
 
-  // If force-refreshing, delete cached entries so we re-fetch from INFARMED
+  // EMA fallback: single-attempt guard per request
+  let emaAttempted = false;
+  async function tryEMAFallbackOnce(): Promise<RegulatoryPDFResult | null> {
+    if (emaAttempted) return null;
+    emaAttempted = true;
+    try {
+      console.log("EMA fallback: attempting...");
+      const match = await searchEMA(medicineInfo.name, medicineInfo.activeSubstance);
+      if (!match) return null;
+      const pdfBuffer = await downloadEMAPdf(match.slug, match.name);
+      if (!pdfBuffer) return null;
+      // Cache under ema-prefixed key
+      setCachedPdf(`ema:${cacheKey}`, {
+        rcmPdf: pdfBuffer,
+        fiPdf: null,
+        medicineName: match.name,
+        activeSubstance: match.activeSubstance,
+        dosage: medicineInfo.dosage || "",
+        pharmaceuticalForm: "",
+        titular: match.holder,
+        confidence: match.confidence,
+      });
+      console.log(`EMA fallback: success — cached under "ema:${cacheKey}"`);
+      return {
+        rcm: pdfBuffer,
+        fi: null,
+        confidence: match.confidence,
+        matchedMedicine: {
+          name: match.name,
+          activeSubstance: match.activeSubstance,
+          dosage: "",
+          pharmaceuticalForm: "",
+          titular: match.holder,
+        },
+        source: "ema",
+      };
+    } catch (err) {
+      console.error("EMA fallback failed:", err);
+      return null;
+    }
+  }
+
+  // If force-refreshing, delete cached entries from BOTH sources
   if (forceRefresh) {
     console.log(`Force refresh requested — deleting cache for "${medicineInfo.name}"`);
     deleteCachedPdf(cacheKey);
+    deleteCachedPdf(`ema:${cacheKey}`);
   }
 
   // === Phase 1: Check PDF cache — skip Playwright entirely on hit ===
-  const cached = getCachedPdf(cacheKey);
-  if (cached) {
-    console.log(`Cache hit for "${cacheKey}" — returning cached PDF (${cached.rcmPdf?.length ?? 0} bytes)`);
+  // Explicit dual reads: INFARMED first (preferred), then EMA
+  const infarmedCached = getCachedPdf(cacheKey);
+  if (infarmedCached) {
+    console.log(`Cache hit (INFARMED) for "${cacheKey}" — returning cached PDF (${infarmedCached.rcmPdf?.length ?? 0} bytes)`);
     return {
-      rcm: cached.rcmPdf,
-      fi: cached.fiPdf,
-      confidence: cached.confidence,
+      rcm: infarmedCached.rcmPdf,
+      fi: infarmedCached.fiPdf,
+      confidence: infarmedCached.confidence,
       matchedMedicine: {
-        name: cached.medicineName,
-        activeSubstance: cached.activeSubstance,
-        dosage: cached.dosage || undefined,
-        pharmaceuticalForm: cached.pharmaceuticalForm || undefined,
-        titular: cached.titular || undefined,
+        name: infarmedCached.medicineName,
+        activeSubstance: infarmedCached.activeSubstance,
+        dosage: infarmedCached.dosage || undefined,
+        pharmaceuticalForm: infarmedCached.pharmaceuticalForm || undefined,
+        titular: infarmedCached.titular || undefined,
       },
+      source: "infarmed",
+    };
+  }
+  const emaCached = getCachedPdf(`ema:${cacheKey}`);
+  if (emaCached) {
+    console.log(`Cache hit (EMA) for "ema:${cacheKey}" — returning cached PDF (${emaCached.rcmPdf?.length ?? 0} bytes)`);
+    return {
+      rcm: emaCached.rcmPdf,
+      fi: emaCached.fiPdf,
+      confidence: emaCached.confidence,
+      matchedMedicine: {
+        name: emaCached.medicineName,
+        activeSubstance: emaCached.activeSubstance,
+        dosage: emaCached.dosage || undefined,
+        pharmaceuticalForm: emaCached.pharmaceuticalForm || undefined,
+        titular: emaCached.titular || undefined,
+      },
+      source: "ema",
     };
   }
 
@@ -454,6 +518,9 @@ export async function regulatoryPDF(
         "All search strategies failed - no results found for:",
         medicineInfo.name
       );
+      // EMA fallback insertion point 1: Playwright search failed
+      const emaResult = await tryEMAFallbackOnce();
+      if (emaResult) return emaResult;
       return { rcm: null, fi: null, confidence: 0 };
     }
 
@@ -584,6 +651,12 @@ export async function regulatoryPDF(
       console.error(`✗ Intercepted document is not a PDF (header: "${pdfBuffer.subarray(0, 20).toString("ascii")}") — skipping`);
     }
 
+    // EMA fallback insertion point 2: PDF download failed
+    if (!isPdf) {
+      const emaResult = await tryEMAFallbackOnce();
+      if (emaResult) return emaResult;
+    }
+
     if (isPdf) {
       console.log("✓ Successfully retrieved PDF via interception");
 
@@ -615,6 +688,7 @@ export async function regulatoryPDF(
         dosage: bestMatch.dosage || undefined,
         titular: bestMatch.titular || undefined,
       },
+      source: "infarmed",
     };
   } catch (error) {
     console.error("Error fetching regulatory documents:", error);

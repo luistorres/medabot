@@ -28,6 +28,7 @@ export const fetchRegulatoryPdf = createServerFn({
         contentType: "application/pdf",
         confidence: result.confidence,
         matchedMedicine: result.matchedMedicine,
+        source: result.source || "infarmed",
       };
     }
 
