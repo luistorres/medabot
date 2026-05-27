@@ -85,6 +85,8 @@ const Chat = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   // Guards against out-of-order / post-unmount suggestion updates.
   const suggestionRequestId = useRef(0);
+  // Guards against a stale in-flight answer landing after a reset/new question.
+  const queryRequestId = useRef(0);
   const isMounted = useRef(true);
 
   useEffect(() => {
@@ -153,6 +155,7 @@ const Chat = ({
       hasAutoCollapsedSuggestions.current = true;
     }
 
+    const reqId = ++queryRequestId.current;
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       type: "user",
@@ -171,6 +174,9 @@ const Chat = ({
           question: text,
         },
       });
+
+      // Reset/superseded while this query was in flight — drop the result.
+      if (queryRequestId.current !== reqId) return;
 
       if (result.success && typeof result.answer === "string") {
         const assistantMessage: ChatMessage = {
@@ -197,6 +203,7 @@ const Chat = ({
         setMessages((prev) => [...prev, errorMessage]);
       }
     } catch (error) {
+      if (queryRequestId.current !== reqId) return;
       console.error("Error processing question:", error);
       const errorMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
@@ -208,15 +215,18 @@ const Chat = ({
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
-      setLoading(false);
+      // Only clear loading for the current (non-superseded) request.
+      if (queryRequestId.current === reqId) setLoading(false);
     }
   };
 
   // Refazer — reset the conversation to just the seed overview (or empty).
   const handleRefazer = () => {
-    // Invalidate any in-flight suggestion request so a late response can't
-    // overwrite the reset static suggestions.
+    // Invalidate any in-flight suggestion AND answer request so a late
+    // response can't repopulate the freshly reset conversation.
     suggestionRequestId.current++;
+    queryRequestId.current++;
+    setLoading(false);
     setMessages(initialOverview ? [buildOverviewMessage(initialOverview)] : []);
     setQuestion("");
     setSuggestions(STATIC_SUGGESTIONS);
