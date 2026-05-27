@@ -1,5 +1,6 @@
 import { ReactNode } from "react";
 import TabLayout from "./TabLayout";
+import { Wordmark } from "../ui/Wordmark";
 
 interface MobileLayoutProps {
   medicineInfoPanel: ReactNode;
@@ -15,12 +16,11 @@ const MobileLayout = ({
   onReset,
 }: MobileLayoutProps) => {
   return (
-    <div className="h-dvh w-full flex flex-col overflow-hidden bg-gray-50">
+    <div className="h-dvh w-full flex flex-col overflow-hidden bg-bg">
       {/* Header */}
-      <header className="h-12 bg-white border-b border-gray-200 flex items-center px-4 flex-shrink-0">
-        <button onClick={onReset} className="flex items-center gap-2 cursor-pointer">
-          <img src="/logo.png" alt="MedaBot" className="w-8 h-8 object-contain rounded-lg" />
-          <h1 className="text-base font-bold text-gray-900">MedaBot</h1>
+      <header className="h-12 bg-bg border-b border-rule flex items-center px-4 flex-shrink-0">
+        <button onClick={onReset} className="flex items-center cursor-pointer">
+          <Wordmark size={17} />
         </button>
       </header>
 

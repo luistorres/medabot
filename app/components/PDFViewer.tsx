@@ -4,6 +4,7 @@ import { useMediaQuery } from "../hooks/useMediaQuery";
 import { usePinchZoom } from "../hooks/usePinchZoom";
 import { useSwipeNavigation } from "../hooks/useSwipeNavigation";
 import FloatingBackButton from "./ui/FloatingBackButton";
+import { Icon } from "./ui/Icon";
 
 interface PDFViewerProps {
   onClose?: () => void;
@@ -14,6 +15,7 @@ interface PDFViewerProps {
 const PDFViewer = ({ onClose, width = 40, isTabMode = false }: PDFViewerProps) => {
   const [isClient, setIsClient] = useState(false);
   const [pdfComponents, setPdfComponents] = useState<any>(null);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -76,11 +78,11 @@ const PDFViewer = ({ onClose, width = 40, isTabMode = false }: PDFViewerProps) =
     onSwipeRight: goToPreviousPage,
   });
 
-  // Pulse highlight when jumping from chat
+  // Amber wash highlight when jumping from chat
   useEffect(() => {
     if (lastJumpedPage !== null) {
       setIsHighlighting(true);
-      const timer = setTimeout(() => setIsHighlighting(false), 1500);
+      const timer = setTimeout(() => setIsHighlighting(false), 2000);
       return () => clearTimeout(timer);
     }
   }, [lastJumpedPage]);
@@ -90,11 +92,13 @@ const PDFViewer = ({ onClose, width = 40, isTabMode = false }: PDFViewerProps) =
   const handleDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
     setTotalPages(numPages);
     setLoading(false);
+    setLoadError(false);
   };
 
   const handleDocumentLoadError = (error: Error) => {
     console.error("Error loading PDF:", error);
     setLoading(false);
+    setLoadError(true);
   };
 
   const handleClose = () => {
@@ -116,109 +120,149 @@ const PDFViewer = ({ onClose, width = 40, isTabMode = false }: PDFViewerProps) =
 
   const { Document, Page } = pdfComponents;
 
+  // Error state — centered block
+  const errorState = (
+    <div className="flex-1 flex flex-col items-center justify-center p-8 text-center gap-4">
+      <div>
+        <p className="text-[11px] uppercase tracking-[0.12em] text-muted mb-2">
+          FOLHETO NÃO DISPONÍVEL
+        </p>
+        <p className="font-serif text-[16px] text-ink leading-snug">
+          Não foi possível carregar o folheto agora.
+        </p>
+      </div>
+      <div className="flex items-center gap-4">
+        <button
+          onClick={handleClose}
+          className="text-[13px] text-brand underline underline-offset-4 hover:text-brand-deep transition-colors"
+        >
+          Tentar novamente
+        </button>
+      </div>
+    </div>
+  );
+
+  // Header strip (§8.8)
+  const headerStrip = (
+    <div className="flex items-center justify-between px-4 py-3 border-b border-rule bg-bg flex-shrink-0">
+      <div>
+        <p className="text-[11px] uppercase tracking-[0.12em] text-muted leading-none mb-0.5">
+          FOLHETO INFORMATIVO
+        </p>
+        <p className="text-[12px] text-ink-2 leading-none">
+          Página{" "}
+          <span className="font-mono">{currentPage}</span>
+          {" "}de{" "}
+          <span className="font-mono">{totalPages || "—"}</span>
+        </p>
+      </div>
+      <div className="flex items-center gap-1">
+        {/* Prev button — 28×28 square, border-ink rounded-sm */}
+        <button
+          onClick={goToPreviousPage}
+          disabled={currentPage <= 1}
+          className="w-7 h-7 flex items-center justify-center border border-ink rounded-sm text-ink disabled:text-muted disabled:border-muted disabled:cursor-not-allowed transition-colors hover:bg-tint"
+          aria-label="Página anterior"
+        >
+          <Icon.chevron className="w-3.5 h-3.5 rotate-180" />
+        </button>
+        {/* Next button */}
+        <button
+          onClick={goToNextPage}
+          disabled={currentPage >= totalPages}
+          className="w-7 h-7 flex items-center justify-center border border-ink rounded-sm text-ink disabled:text-muted disabled:border-muted disabled:cursor-not-allowed transition-colors hover:bg-tint"
+          aria-label="Próxima página"
+        >
+          <Icon.chevron className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+
   const pdfContent = (
     <div
       ref={pdfContentRef}
-      className={`flex-1 overflow-auto bg-gray-100 flex flex-col items-center p-4 scrollbar-thin min-h-0 ${
-        isHighlighting ? "animate-pulse-highlight" : ""
+      className={`flex-1 overflow-auto bg-bg flex flex-col items-center p-4 scrollbar-thin min-h-0 ${
+        isHighlighting ? "animate-amber-wash" : ""
       }`}
     >
       {loading && (
         <div className="flex items-center justify-center h-full">
-          <div className="animate-spin rounded-full h-10 w-10 border-2 border-primary-200 border-t-primary-600"></div>
+          <div className="animate-spin rounded-full h-10 w-10 border-2 border-brand-soft border-t-brand"></div>
         </div>
       )}
 
-      <Document
-        file={pdfDataUrl}
-        onLoadSuccess={handleDocumentLoadSuccess}
-        onLoadError={handleDocumentLoadError}
-        loading={null}
-        className="max-w-full"
-      >
-        <Page
-          pageNumber={currentPage}
-          scale={scale}
-          width={isDesktop ? (width * 16) - 32 : undefined}
-          renderTextLayer={false}
-          renderAnnotationLayer={false}
-          className="shadow-lg rounded-lg overflow-hidden"
-        />
-      </Document>
+      {loadError ? errorState : (
+        <Document
+          file={pdfDataUrl}
+          onLoadSuccess={handleDocumentLoadSuccess}
+          onLoadError={handleDocumentLoadError}
+          loading={null}
+          className="max-w-full"
+        >
+          {/* Page wrapper: warm paper bg + hairline border + shadow-1 */}
+          <div className="bg-[#FEFCF7] border border-border shadow-1 rounded-sm overflow-hidden">
+            <Page
+              pageNumber={currentPage}
+              scale={scale}
+              width={isDesktop ? (width * 16) - 32 : undefined}
+              renderTextLayer={false}
+              renderAnnotationLayer={false}
+            />
+          </div>
+        </Document>
+      )}
     </div>
   );
 
-  const controls = (
-    <div className="h-14 border-t border-gray-200 flex items-center justify-between px-4 bg-white flex-shrink-0">
-      <button
-        onClick={goToPreviousPage}
-        disabled={currentPage <= 1}
-        className="min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-700 hover:bg-gray-100 rounded-xl disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
-        aria-label="Página anterior"
-      >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-        </svg>
-      </button>
-
-      <div className="flex items-center gap-3">
-        {isEditingPage ? (
-          <input
-            type="number"
-            value={pageInput}
-            onChange={(e) => setPageInput(e.target.value)}
-            onBlur={handlePageInputSubmit}
-            onKeyDown={(e) => e.key === "Enter" && handlePageInputSubmit()}
-            className="w-12 text-center text-sm border border-gray-300 rounded-lg py-1 focus:outline-none focus:ring-2 focus:ring-primary-500"
-            min={1}
-            max={totalPages}
-            autoFocus
-          />
-        ) : (
-          <button
-            onClick={() => {
-              setPageInput(currentPage.toString());
-              setIsEditingPage(true);
-            }}
-            className="text-sm font-medium text-gray-700 hover:text-primary-600 transition-colors"
-          >
-            {currentPage} / {totalPages}
-          </button>
-        )}
-
-        {/* Zoom slider */}
-        <div className="flex items-center gap-1.5">
-          <input
-            type="range"
-            min={50}
-            max={300}
-            value={Math.round(scale * 100)}
-            onChange={(e) => setScale(parseInt(e.target.value) / 100)}
-            className="w-16 h-1 accent-primary-600"
-          />
-          <span className="text-xs text-gray-500 w-8">{Math.round(scale * 100)}%</span>
-        </div>
+  // Zoom controls strip (bottom)
+  const zoomStrip = (
+    <div className="h-10 border-t border-rule flex items-center justify-center gap-2 px-4 bg-bg flex-shrink-0">
+      {isEditingPage ? (
+        <input
+          type="number"
+          value={pageInput}
+          onChange={(e) => setPageInput(e.target.value)}
+          onBlur={handlePageInputSubmit}
+          onKeyDown={(e) => e.key === "Enter" && handlePageInputSubmit()}
+          className="w-12 text-center text-sm border border-border rounded-sm py-1 bg-paper text-ink focus:outline-none focus:ring-1 focus:ring-brand"
+          min={1}
+          max={totalPages}
+          autoFocus
+        />
+      ) : (
+        <button
+          onClick={() => {
+            setPageInput(currentPage.toString());
+            setIsEditingPage(true);
+          }}
+          className="text-xs text-muted hover:text-ink transition-colors font-mono"
+        >
+          {currentPage} / {totalPages}
+        </button>
+      )}
+      <span className="text-muted text-[10px]">·</span>
+      <div className="flex items-center gap-1.5">
+        <input
+          type="range"
+          min={50}
+          max={300}
+          value={Math.round(scale * 100)}
+          onChange={(e) => setScale(parseInt(e.target.value) / 100)}
+          className="w-16 h-1 accent-brand"
+        />
+        <span className="text-[11px] text-muted font-mono w-8">{Math.round(scale * 100)}%</span>
       </div>
-
-      <button
-        onClick={goToNextPage}
-        disabled={currentPage >= totalPages}
-        className="min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-700 hover:bg-gray-100 rounded-xl disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
-        aria-label="Próxima página"
-      >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-        </svg>
-      </button>
     </div>
   );
 
   // Tab mode (mobile, embedded in tab)
   if (!isDesktop && isTabMode) {
     return (
-      <div className="h-full bg-white flex flex-col relative">
+      <div className="h-full bg-bg flex flex-col relative">
+        {headerStrip}
         {pdfContent}
-        {controls}
+        {zoomStrip}
         <FloatingBackButton />
       </div>
     );
@@ -227,42 +271,20 @@ const PDFViewer = ({ onClose, width = 40, isTabMode = false }: PDFViewerProps) =
   // Mobile modal mode
   if (!isDesktop) {
     return (
-      <div className="fixed inset-0 z-50 bg-white flex flex-col">
-        <div className="h-14 border-b border-gray-200 flex items-center justify-between px-4">
-          <h3 className="text-lg font-semibold text-gray-800">Folheto Informativo</h3>
-          <button
-            onClick={handleClose}
-            className="min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-600 hover:text-gray-800 rounded-xl"
-            aria-label="Fechar"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+      <div className="fixed inset-0 z-50 bg-bg flex flex-col">
+        {headerStrip}
         {pdfContent}
-        {controls}
+        {zoomStrip}
       </div>
     );
   }
 
   // Desktop sidebar
   return (
-    <div className="h-full flex flex-col bg-white border-l border-gray-200">
-      <div className="h-14 border-b border-gray-200 flex items-center justify-between px-4 flex-shrink-0">
-        <h3 className="text-base font-semibold text-gray-800">Folheto Informativo</h3>
-        <button
-          onClick={handleClose}
-          className="min-h-[36px] min-w-[36px] flex items-center justify-center text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
-          aria-label="Fechar"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
+    <div className="h-full flex flex-col bg-bg border-l border-rule">
+      {headerStrip}
       {pdfContent}
-      {controls}
+      {zoomStrip}
     </div>
   );
 };
