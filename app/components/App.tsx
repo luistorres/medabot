@@ -113,7 +113,7 @@ function AppContent() {
     }
 
     if (!pdfResponse || !pdfResponse.data) {
-      throw new Error("Não foi possível encontrar o folheto informativo deste medicamento.");
+      throw new Error("INFARMED_NOT_FOUND: Não foi possível encontrar o folheto informativo deste medicamento.");
     }
 
     // Enrich medicineInfo with matched medicine data from INFARMED

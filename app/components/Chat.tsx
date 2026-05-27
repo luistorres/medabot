@@ -127,6 +127,18 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
           sourcePages: result.pageNumbers,
         };
         setMessages((prev) => [...prev, assistantMessage]);
+      } else {
+        // Backend reported failure without throwing — surface the same
+        // retry-able error bubble as a thrown error rather than going silent.
+        const errorMessage: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          type: "error",
+          content:
+            "Não foi possível obter uma resposta neste momento. A sua questão foi guardada — pode tentar novamente.",
+          timestamp: new Date(),
+          retryQuestion: text,
+        };
+        setMessages((prev) => [...prev, errorMessage]);
       }
     } catch (error) {
       console.error("Error processing question:", error);

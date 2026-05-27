@@ -140,61 +140,46 @@ const MedicineInfoPanel = ({
       <div className="flex-shrink-0 border-t border-gray-100">
         <div className="p-4">
           {pdfData && (
-            <div className="space-y-3">
-              <Button variant="primary" fullWidth onClick={handleViewPdf} className="shadow-lg shadow-primary-600/25">
+            <div className="space-y-2.5">
+              {/* Primary — open the leaflet */}
+              <Button variant="primary" fullWidth onClick={handleViewPdf}>
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9z" />
                 </svg>
                 Ver folheto informativo
               </Button>
 
-              {/* Utility actions — download and refresh only */}
-              <div className="flex items-start justify-center gap-5">
-                <button
-                  onClick={onDownloadPdf}
-                  className="group flex flex-col items-center gap-1.5"
-                >
-                  <span className="flex items-center justify-center w-10 h-10 rounded-full bg-gray-50 ring-1 ring-gray-200 text-gray-500 transition-all duration-150 group-hover:bg-primary-50 group-hover:ring-primary-200 group-hover:text-primary-600 group-active:scale-95">
-                    <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                    </svg>
-                  </span>
-                  <span className="text-[11px] font-medium text-gray-400 group-hover:text-primary-600 transition-colors">
-                    Transferir
-                  </span>
-                </button>
-
-                <button
-                  onClick={onForceRefresh}
-                  className="group flex flex-col items-center gap-1.5"
-                >
-                  <span className="flex items-center justify-center w-10 h-10 rounded-full bg-gray-50 ring-1 ring-gray-200 text-gray-500 transition-all duration-150 group-hover:bg-accent-50 group-hover:ring-accent-200 group-hover:text-accent-600 group-active:scale-95">
-                    <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182" />
-                    </svg>
-                  </span>
-                  <span className="text-[11px] font-medium text-gray-400 group-hover:text-accent-600 transition-colors">
-                    Atualizar
-                  </span>
-                </button>
+              {/* Secondary — utilities for this leaflet, a matched pair */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <Button variant="secondary" fullWidth onClick={onDownloadPdf}>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                  </svg>
+                  Transferir
+                </Button>
+                <Button variant="secondary" fullWidth onClick={onForceRefresh}>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182" />
+                  </svg>
+                  Atualizar
+                </Button>
               </div>
 
-              {/* Single, consistent "Nova pesquisa" action */}
-              <Button variant="ghost" fullWidth onClick={onReset}>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+              {/* Tertiary — start over, de-emphasized and set apart */}
+              <button
+                onClick={onReset}
+                className="w-full min-h-[44px] mt-0.5 inline-flex items-center justify-center gap-1.5 rounded-xl text-[13px] font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
                 </svg>
                 Nova pesquisa
-              </Button>
+              </button>
             </div>
           )}
 
           {!pdfData && (
-            <Button
-              variant="ghost"
-              fullWidth
-              onClick={onReset}
-            >
+            <Button variant="secondary" fullWidth onClick={onReset}>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
               </svg>
