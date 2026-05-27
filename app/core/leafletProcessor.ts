@@ -10,8 +10,36 @@ export interface ChunkWithEmbedding extends Chunk {
   embedding: number[];
 }
 
-// Split text into overlapping chunks, preferring paragraph boundaries
-function splitText(text: string, chunkSize = 800, overlap = 150): string[] {
+// The string pdf-parse uses to join consecutive page texts.
+// pdf-parse sets ret.text = `${ret.text}\n\n${pageText}` for each page,
+// so the full text is "\n\n" + page1 + "\n\n" + page2 + ...
+const PAGE_JOINER = "\n\n";
+
+/**
+ * Pure helper: chunk each page's text separately (paragraph-aware, 800/150),
+ * assigning the 1-based page number to every chunk it produces.
+ *
+ * This is the canonical runtime chunking function. The test in
+ * scripts/test-page-mapping.ts exercises this exact export.
+ *
+ * @param pageTexts  Array of per-page text strings (index 0 = page 1).
+ * @returns          Flat array of chunks in page order, each with the correct page number.
+ */
+export function chunkPagesWithNumbers(pageTexts: string[]): Chunk[] {
+  const result: Chunk[] = [];
+  for (let i = 0; i < pageTexts.length; i++) {
+    const pageNum = i + 1; // 1-based
+    const pageChunks = splitIntoChunks(pageTexts[i]);
+    for (const text of pageChunks) {
+      result.push({ text, page: pageNum });
+    }
+  }
+  return result;
+}
+
+// Split text into overlapping chunks, preferring paragraph boundaries.
+// Returns only the chunk text strings (page assignment is handled by the caller).
+function splitIntoChunks(text: string, chunkSize = 800, overlap = 150): string[] {
   const chunks: string[] = [];
   let start = 0;
   while (start < text.length) {
@@ -26,10 +54,13 @@ function splitText(text: string, chunkSize = 800, overlap = 150): string[] {
       else if (lastNewline > chunkSize * 0.5) end = start + lastNewline;
       else if (lastSentence > chunkSize * 0.5) end = start + lastSentence + 1;
     }
-    chunks.push(text.slice(start, end).trim());
+    const chunkText = text.slice(start, end).trim();
+    if (chunkText.length > 0) {
+      chunks.push(chunkText);
+    }
     start = end - overlap;
   }
-  return chunks.filter((c) => c.length > 0);
+  return chunks;
 }
 
 function cosineSimilarity(a: number[], b: number[]): number {
@@ -52,24 +83,78 @@ async function embedTexts(texts: string[]): Promise<number[][]> {
   return resp.data.map((d) => d.embedding);
 }
 
-// Process PDF: extract text, chunk, embed
+// Process PDF: extract text, chunk per-page, embed
 export async function processLeaflet(pdfBase64: string) {
   try {
     const pdfBuffer = Buffer.from(pdfBase64, "base64");
-    const pdf = await pdfParse(pdfBuffer);
 
-    const textChunks = splitText(pdf.text);
+    // Collect per-page text via pagerender callback.
+    // pdf-parse joins pages with PAGE_JOINER ("\n\n"), prepending it even before
+    // the first page, so: pdf.text === "\n\n" + pageTexts.join("\n\n")
+    const pageTexts: string[] = [];
 
-    // Estimate page numbers from position in full text
-    const totalPages = pdf.numpages;
-    const chunks: Chunk[] = textChunks.map((text, i) => {
-      const position = i / textChunks.length;
-      const page = Math.min(
-        Math.ceil(position * totalPages) + 1,
-        totalPages,
+    const pagerender = (pageData: any): Promise<string> => {
+      const renderOptions = {
+        normalizeWhitespace: false,
+        disableCombineTextItems: false,
+      };
+      return pageData.getTextContent(renderOptions).then(
+        (textContent: any) => {
+          let lastY: number | undefined;
+          let text = "";
+          for (const item of textContent.items) {
+            if (lastY === item.transform[5] || lastY === undefined) {
+              text += item.str;
+            } else {
+              text += "\n" + item.str;
+            }
+            lastY = item.transform[5];
+          }
+          pageTexts.push(text);
+          return text;
+        },
       );
-      return { text, page };
-    });
+    };
+
+    const pdf = await pdfParse(pdfBuffer, { pagerender });
+
+    const totalPages = pdf.numpages;
+
+    // ── Issue 3: Invariant check ──────────────────────────────────────────────
+    // Verify that pagerender captured every page AND that pdf-parse's output
+    // matches the expected join (PAGE_JOINER prepended before each page).
+    // If either condition fails we fall back to whole-text chunking with a
+    // proportional page estimate so nothing silently breaks.
+    const expectedJoined = PAGE_JOINER + pageTexts.join(PAGE_JOINER);
+    const usePerPage =
+      pageTexts.length === pdf.numpages && pdf.text === expectedJoined;
+
+    let chunks: Chunk[];
+
+    if (usePerPage) {
+      // ── Issue 1: Per-page chunking ─────────────────────────────────────────
+      // Every chunk belongs to exactly one real page. No cross-page bleed.
+      chunks = chunkPagesWithNumbers(pageTexts);
+    } else {
+      // Fallback: chunk the whole text and assign pages proportionally.
+      // This path is taken when pagerender was skipped or pdf-parse changed its
+      // join format — still better than crashing.
+      console.warn(
+        `[processLeaflet] Per-page invariant failed (captured ${pageTexts.length} pages, ` +
+          `numpages=${pdf.numpages}, textMatch=${pdf.text === expectedJoined}). ` +
+          `Falling back to whole-text chunking with proportional page estimate.`,
+      );
+      const rawChunkTexts = splitIntoChunks(pdf.text);
+      chunks = rawChunkTexts.map((text, idx) => {
+        const position =
+          pdf.text.indexOf(text) / Math.max(pdf.text.length, 1);
+        const page = Math.max(
+          1,
+          Math.min(Math.ceil(position * totalPages) + 1, totalPages),
+        );
+        return { text, page };
+      });
+    }
 
     // Embed all chunks in one batch
     const embeddings = await embedTexts(chunks.map((c) => c.text));
