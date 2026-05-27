@@ -204,6 +204,9 @@ const Chat = ({
 
   // Refazer — reset the conversation to just the seed overview (or empty).
   const handleRefazer = () => {
+    // Invalidate any in-flight suggestion request so a late response can't
+    // overwrite the reset static suggestions.
+    suggestionRequestId.current++;
     setMessages(initialOverview ? [buildOverviewMessage(initialOverview)] : []);
     setQuestion("");
     setSuggestions(STATIC_SUGGESTIONS);
