@@ -8,11 +8,13 @@ import Chip from "./ui/Chip";
 
 interface ChatMessage {
   id: string;
-  type: "user" | "assistant";
+  type: "user" | "assistant" | "error";
   content: string;
   timestamp: Date;
   sourcePages?: number[];
   isOverview?: boolean;
+  /** Original question that triggered this error — for retry */
+  retryQuestion?: string;
 }
 
 interface ChatProps {
@@ -130,10 +132,11 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
       console.error("Error processing question:", error);
       const errorMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
-        type: "assistant",
+        type: "error",
         content:
-          "Desculpe, encontrei um erro ao processar a sua questão. Tente novamente.",
+          "Não foi possível obter uma resposta neste momento. A sua questão foi guardada — pode tentar novamente.",
         timestamp: new Date(),
+        retryQuestion: text,
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
@@ -154,6 +157,26 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
   const renderMessageContent = (message: ChatMessage) => {
     if (message.type === "user") {
       return <div className="text-sm leading-relaxed">{message.content}</div>;
+    }
+
+    if (message.type === "error") {
+      return (
+        <div className="text-sm leading-relaxed space-y-2">
+          <p className="text-error-700">{message.content}</p>
+          {message.retryQuestion && (
+            <button
+              onClick={() => handleAskQuestion(message.retryQuestion)}
+              disabled={loading}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-primary-600 hover:text-primary-700 disabled:opacity-50 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
+              </svg>
+              Tentar novamente
+            </button>
+          )}
+        </div>
+      );
     }
 
     const notFound = isNotFoundAnswer(message.content);
@@ -203,6 +226,9 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
     );
   };
 
+  // Whether the chat is still empty (overview not loaded yet, no messages)
+  const showEmptyState = messages.length === 0 && !loading;
+
   return (
     <div className="bg-white flex flex-col h-full">
       {/* Provenance banner */}
@@ -219,6 +245,21 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
         className="flex-1 overflow-y-auto px-4 pt-4 pb-2 min-h-0 scrollbar-thin"
       >
         <div className="max-w-2xl mx-auto space-y-1">
+          {/* Empty state — before any message (overview not loaded yet) */}
+          {showEmptyState && (
+            <div className="flex flex-col items-center justify-center py-10 text-center animate-fade-in">
+              <div className="w-12 h-12 rounded-full bg-primary-50 flex items-center justify-center mb-3">
+                <svg className="w-6 h-6 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" />
+                </svg>
+              </div>
+              <p className="text-sm font-medium text-gray-600 mb-1">Pronto para responder</p>
+              <p className="text-xs text-gray-400 max-w-[220px]">
+                Faça uma pergunta sobre {medicineName} — as respostas vêm sempre do folheto oficial.
+              </p>
+            </div>
+          )}
+
           {messages.map((message, index) => {
             const prevMessage = index > 0 ? messages[index - 1] : null;
             const sameSender = prevMessage?.type === message.type;
@@ -235,9 +276,11 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
                   className={`max-w-[85%] md:max-w-[75%] ${
                     message.type === "user"
                       ? "bg-primary-600 text-white rounded-2xl rounded-br-md px-4 py-2.5 shadow-sm"
-                      : notFound
-                        ? "bg-gray-50 text-gray-500 rounded-2xl rounded-bl-md px-4 py-2.5 border border-dashed border-gray-200"
-                        : "bg-gray-100 text-gray-800 rounded-2xl rounded-bl-md px-4 py-2.5"
+                      : message.type === "error"
+                        ? "bg-error-50 text-gray-800 rounded-2xl rounded-bl-md px-4 py-2.5 border border-error-100"
+                        : notFound
+                          ? "bg-gray-50 text-gray-500 rounded-2xl rounded-bl-md px-4 py-2.5 border border-dashed border-gray-200"
+                          : "bg-gray-100 text-gray-800 rounded-2xl rounded-bl-md px-4 py-2.5"
                   }`}
                 >
                   {renderMessageContent(message)}
@@ -300,7 +343,7 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
           <button
             onClick={() => scrollToBottom("smooth")}
             className="absolute bottom-2 right-4 bg-white hover:bg-gray-50 text-gray-600 p-2.5 rounded-full shadow-lg border border-gray-200 transition-all z-10"
-            aria-label="Scroll to bottom"
+            aria-label="Ir para o fim"
           >
             <svg
               className="w-4 h-4"
@@ -330,7 +373,7 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 0 0 1.5-.189m-1.5.189a6.01 6.01 0 0 1-1.5-.189m3.75 7.478a12.06 12.06 0 0 1-4.5 0m3.75 2.383a14.406 14.406 0 0 1-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 1 0-7.517 0c.85.493 1.509 1.333 1.509 2.316V18" />
             </svg>
-            <span className="font-medium">Sugestões</span>
+            <span className="font-medium">Sugestões de perguntas</span>
             <svg
               className={`w-3 h-3 ml-auto transition-transform duration-200 ${suggestionsOpen ? "rotate-180" : ""}`}
               fill="none"
@@ -372,7 +415,7 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
             type="text"
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
-            placeholder="Escreva a sua questão aqui..."
+            placeholder="Escreva a sua pergunta aqui..."
             className="flex-grow min-h-[44px] px-4 text-sm bg-gray-100 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent focus:bg-white transition-colors"
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
@@ -386,7 +429,7 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
             onClick={() => handleAskQuestion()}
             disabled={loading || !question.trim()}
             className="min-h-[44px] min-w-[44px] flex items-center justify-center bg-primary-600 text-white rounded-xl hover:bg-primary-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-            aria-label="Enviar"
+            aria-label="Enviar pergunta"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />

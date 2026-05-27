@@ -59,7 +59,7 @@ const SearchScreen = ({ onSubmit, onCancel, onAdvancedSearch }: SearchScreenProp
             Pesquisar <span className="text-primary-600">medicamento</span>
           </h2>
           <p className="text-[15px] text-gray-400 font-light leading-relaxed">
-            Escreva o nome, substância ou dosagem
+            Escreva o nome do medicamento, a substância ativa ou a dosagem
           </p>
         </div>
 
@@ -94,14 +94,14 @@ const SearchScreen = ({ onSubmit, onCancel, onAdvancedSearch }: SearchScreenProp
             onClick={onAdvancedSearch}
             className="text-[13px] text-primary-600 hover:text-primary-700 font-medium transition-colors md:w-full md:text-center"
           >
-            Pesquisa avançada (formulário completo)
+            Mais opções de pesquisa →
           </button>
 
-          {/* Search hints */}
+          {/* Search hints / empty state */}
           <div className="mt-10 space-y-3 animate-stagger-in stagger-4 md:text-center">
             <p className="text-[11px] font-medium text-gray-300 uppercase tracking-widest">Exemplos de pesquisa</p>
             <div className="flex flex-wrap gap-2 md:justify-center">
-              {["Ben-u-ron 1000mg", "Brufen 600mg"].map((hint) => (
+              {["Ben-u-ron 1000mg", "Brufen 600mg", "Amoxicilina 500mg"].map((hint) => (
                 <button
                   key={hint}
                   onClick={() => setQuery(hint)}
@@ -111,6 +111,10 @@ const SearchScreen = ({ onSubmit, onCancel, onAdvancedSearch }: SearchScreenProp
                 </button>
               ))}
             </div>
+            <p className="text-[12px] text-gray-400 leading-relaxed pt-2">
+              Pode pesquisar pelo nome comercial, substância ativa ou dosagem —
+              ou combine-os para um resultado mais preciso.
+            </p>
           </div>
         </div>
       </div>
