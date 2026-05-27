@@ -170,11 +170,24 @@ interface SearchAttempt {
   dosage?: string;
 }
 
+interface PerformSearchResult {
+  /** true = results table appeared; false = clean zero-results or operational failure */
+  found: boolean;
+  /**
+   * true when the false was caused by an operational error (navigation timeout,
+   * selector failure, unexpected exception) rather than a clean empty result.
+   * The caller must NOT rethrow — the fallback chain keeps running regardless —
+   * but it should set its own `operationalFailure` flag so the final outcome
+   * can be classified correctly.
+   */
+  operational?: boolean;
+}
+
 // Perform search with given criteria
 async function performSearch(
   page: Page,
   attempt: SearchAttempt
-): Promise<boolean> {
+): Promise<PerformSearchResult> {
   try {
     // Navigate back to the search page for each attempt
     await page.goto(
@@ -231,7 +244,7 @@ async function performSearch(
         timeout: 10000,
       });
 
-      return true;
+      return { found: true };
     } catch (error) {
       // Check if there's a "no results" message
       const noResultsMsg = await page
@@ -241,16 +254,20 @@ async function performSearch(
         .catch(() => false);
 
       if (noResultsMsg) {
+        // Clean empty result — NOT an operational failure
         console.log("No results found for this search");
-        return false;
+        return { found: false };
       }
 
-      // Other error - rethrow
+      // Other error - rethrow so the outer catch marks it operational
       throw error;
     }
   } catch (error) {
+    // Operational failure (navigation/selector/network/timeout exception).
+    // Return false so the fallback chain continues to the next strategy,
+    // but signal the caller that this was not a clean zero-result.
     console.error("Search attempt failed:", error);
-    return false;
+    return { found: false, operational: true };
   }
 }
 
@@ -268,6 +285,14 @@ export interface RegulatoryPDFResult {
   candidates?: SearchCandidate[];
   confidence: number;
   matchedMedicine?: MatchedMedicineInfo;
+  /**
+   * Set to true when a matched medicine row was found but the PDF could not be
+   * retrieved due to an operational error (timeout, non-PDF response, interception
+   * failure). The server layer should tag this as INFARMED_SERVICE: rather than
+   * INFARMED_NOT_FOUND:. Never set when candidates are present (disambiguation
+   * must still work).
+   */
+  operationalFailure?: boolean;
 }
 
 // Build search strategies dynamically based on available input fields.
@@ -316,6 +341,11 @@ export async function regulatoryPDF(
   medicineInfo: MedicineSearchInput,
   forceRefresh?: boolean
 ): Promise<RegulatoryPDFResult> {
+  // Tracks whether any strategy/phase failed due to an operational error
+  // (navigation timeout, selector failure, network error, PDF download failure)
+  // rather than a clean "zero results" outcome. Set inside the try block below
+  // so it is in scope at the final no-result check.
+  let operationalFailure = false;
   const { selectedCandidate } = medicineInfo;
   const normalizedName = medicineInfo.name.toLowerCase().trim();
   const normalizedDosage = medicineInfo.dosage?.toLowerCase().trim();
@@ -427,9 +457,15 @@ export async function regulatoryPDF(
     for (let i = 0; i < searchStrategies.length; i++) {
       console.log(`\n=== Attempt ${i + 1}/${searchStrategies.length} ===`);
 
-      const success = await performSearch(page, searchStrategies[i]);
+      const searchOutcome = await performSearch(page, searchStrategies[i]);
 
-      if (success) {
+      if (searchOutcome.operational) {
+        // Operational error (navigation/selector/timeout) — note it but keep
+        // falling through to the next strategy (do NOT break or rethrow here).
+        operationalFailure = true;
+      }
+
+      if (searchOutcome.found) {
         searchResults = await extractSearchResults(
           page,
           searchInput.name,
@@ -450,8 +486,21 @@ export async function regulatoryPDF(
     }
 
     if (searchResults.length === 0) {
+      if (operationalFailure) {
+        // At least one strategy hit an operational error (navigation/selector/
+        // timeout/network) rather than returning a clean empty result.
+        // Throw so the server layer tags this as INFARMED_SERVICE:.
+        console.error(
+          "All search strategies failed due to operational error for:",
+          medicineInfo.name
+        );
+        throw new Error(
+          `Falha operacional ao pesquisar '${medicineInfo.name}' no INFARMED (timeout de navegação ou erro de rede).`
+        );
+      }
+      // Clean "nothing found" — no operational error, just zero results.
       console.error(
-        "All search strategies failed - no results found for:",
+        "All search strategies exhausted - no results found for:",
         medicineInfo.name
       );
       return { rcm: null, fi: null, confidence: 0 };
@@ -601,6 +650,10 @@ export async function regulatoryPDF(
       setCachedPdf(cacheKey, cacheEntry);
       console.log(`Cached PDF under "${cacheKey}" (${pdfBuffer.length} bytes)`);
     } else {
+      // A medicine row was matched but the PDF could not be retrieved
+      // (timeout, non-PDF content, or interception failure) — this is an
+      // operational failure, not a clean "not found".
+      operationalFailure = true;
       console.error("✗ Failed to retrieve PDF - timeout or network error");
     }
 
@@ -615,14 +668,16 @@ export async function regulatoryPDF(
         dosage: bestMatch.dosage || undefined,
         titular: bestMatch.titular || undefined,
       },
+      // Signal the server layer that the PDF retrieval failed operationally
+      // (so it can tag the error as INFARMED_SERVICE: instead of NOT_FOUND).
+      // Only set when there really was a failure (isPdf is falsy).
+      ...(operationalFailure && { operationalFailure: true }),
     };
   } catch (error) {
     console.error("Error fetching regulatory documents:", error);
-    return {
-      rcm: null,
-      fi: null,
-      confidence: 0,
-    };
+    // Re-throw so the server layer can distinguish network/scraping failures
+    // from a clean "nothing found" result (which returns { rcm: null, fi: null }).
+    throw error;
   } finally {
     try {
       await page?.unrouteAll({ behavior: "ignoreErrors" });

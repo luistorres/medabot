@@ -1,5 +1,6 @@
 import { IdentifyMedicineResponse } from "../core/identify";
 import Button from "./ui/Button";
+import { classifyProcessingError } from "../utils/classifyProcessingError";
 
 interface Step {
   id: string;
@@ -32,6 +33,12 @@ const SpinnerIcon = () => (
   <div className="animate-spin rounded-full h-5 w-5 border-2 border-white/30 border-t-white" />
 );
 
+const XIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+  </svg>
+);
+
 const ProcessingScreen = ({
   steps,
   currentStep,
@@ -46,6 +53,8 @@ const ProcessingScreen = ({
   onGoToManualForm,
   onReset,
 }: ProcessingScreenProps) => {
+  const classified = processingError ? classifyProcessingError(processingError) : null;
+
   return (
     <div className="min-h-screen bg-mesh-landing flex items-center justify-center p-6 relative overflow-hidden">
       {/* Decorative floating orbs */}
@@ -99,36 +108,39 @@ const ProcessingScreen = ({
           </div>
         )}
 
-        {/* Processing Steps */}
-        {loading && (
+        {/* Processing Steps — visible while loading OR when there's an error (so the user sees which step failed) */}
+        {(loading || (processingError && failedStep)) && (
           <div className="glass rounded-2xl ring-1 ring-gray-200/60 shadow-sm p-5 animate-stagger-in stagger-2">
             <div className="space-y-3.5">
               {steps.map((step) => {
                 const isCompleted = completedSteps.includes(step.id);
                 const isCurrent = currentStep === step.id;
+                const isFailed = failedStep === step.id;
+
+                let iconBg = "bg-gray-100/80 text-gray-400";
+                let labelClass = "text-gray-400 font-light";
+                let iconContent: React.ReactNode = step.icon;
+
+                if (isFailed) {
+                  iconBg = "bg-error-100 text-error-600";
+                  labelClass = "text-error-700 font-medium";
+                  iconContent = <XIcon />;
+                } else if (isCompleted) {
+                  iconBg = "bg-accent-500 text-white shadow-sm shadow-accent-500/30";
+                  labelClass = "text-accent-700 font-medium";
+                  iconContent = <CheckIcon />;
+                } else if (isCurrent) {
+                  iconBg = "bg-primary-600 text-white shadow-sm shadow-primary-600/30";
+                  labelClass = "text-primary-700 font-medium";
+                  iconContent = <SpinnerIcon />;
+                }
 
                 return (
                   <div key={step.id} className="flex items-center gap-3.5">
-                    <div
-                      className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300 ${
-                        isCompleted
-                          ? "bg-accent-500 text-white shadow-sm shadow-accent-500/30"
-                          : isCurrent
-                            ? "bg-primary-600 text-white shadow-sm shadow-primary-600/30"
-                            : "bg-gray-100/80 text-gray-400"
-                      }`}
-                    >
-                      {isCompleted ? <CheckIcon /> : isCurrent ? <SpinnerIcon /> : step.icon}
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300 ${iconBg}`}>
+                      {iconContent}
                     </div>
-                    <span
-                      className={`text-sm flex-1 ${
-                        isCompleted
-                          ? "text-accent-700 font-medium"
-                          : isCurrent
-                            ? "text-primary-700 font-medium"
-                            : "text-gray-400 font-light"
-                      }`}
-                    >
+                    <span className={`text-sm flex-1 ${labelClass}`}>
                       {isCurrent && searchMessage ? searchMessage : step.label}
                     </span>
                   </div>
@@ -139,7 +151,7 @@ const ProcessingScreen = ({
         )}
 
         {/* Error Display */}
-        {processingError && (
+        {classified && (
           <div className="glass rounded-2xl ring-1 ring-error-200/60 shadow-sm p-5 animate-fade-in">
             <div className="flex items-start gap-3.5 mb-5">
               <div className="w-10 h-10 rounded-full bg-error-100 flex items-center justify-center flex-shrink-0">
@@ -148,13 +160,13 @@ const ProcessingScreen = ({
                 </svg>
               </div>
               <div className="flex-1">
-                <h4 className="font-700 text-error-800 tracking-tight">Erro de Processamento</h4>
-                <p className="text-sm text-error-700 mt-1 font-light">{processingError}</p>
+                <h4 className="font-700 text-error-700 tracking-tight">{classified.title}</h4>
+                <p className="text-sm text-error-700 mt-1 font-light">{classified.message}</p>
               </div>
             </div>
 
-            {/* Retry specific step */}
-            {failedStep && (
+            {/* Primary action — contextual per error kind */}
+            {classified.primaryAction === "retry" && failedStep && (
               <Button
                 variant="primary"
                 fullWidth
@@ -168,15 +180,39 @@ const ProcessingScreen = ({
               </Button>
             )}
 
+            {classified.primaryAction === "search" && (
+              <Button
+                variant="primary"
+                fullWidth
+                onClick={onGoToManualForm}
+                className="mb-3 shadow-lg shadow-primary-600/25"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+                </svg>
+                Pesquisa avançada
+              </Button>
+            )}
+
             <div className="border-t border-gray-200/60 pt-4">
-              <p className="text-[13px] text-gray-500 mb-3 font-light">Ou escolha outra opção:</p>
+              <p className="text-[13px] text-gray-500 mb-3 font-light">Outras opções:</p>
               <div className="grid grid-cols-2 gap-2.5">
+                {classified.primaryAction !== "retry" && failedStep && (
+                  <Button variant="secondary" onClick={() => onRetryStep(failedStep)}>
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
+                    </svg>
+                    Tentar de novo
+                  </Button>
+                )}
                 <Button variant="secondary" onClick={onGoToCamera}>
                   Usar câmara
                 </Button>
-                <Button variant="secondary" onClick={onGoToManualForm}>
-                  Manual
-                </Button>
+                {classified.primaryAction === "retry" && (
+                  <Button variant="secondary" onClick={onGoToManualForm}>
+                    Pesquisa avançada
+                  </Button>
+                )}
               </div>
               <Button variant="ghost" fullWidth onClick={onReset} className="mt-2">
                 Voltar ao início

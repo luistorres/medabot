@@ -113,7 +113,7 @@ function AppContent() {
     }
 
     if (!pdfResponse || !pdfResponse.data) {
-      throw new Error("Não foi possível encontrar o folheto informativo deste medicamento.");
+      throw new Error("INFARMED_NOT_FOUND: Não foi possível encontrar o folheto informativo deste medicamento.");
     }
 
     // Enrich medicineInfo with matched medicine data from INFARMED
@@ -192,10 +192,14 @@ function AppContent() {
       setCurrentStep("");
     }
 
+    // Track which step is running so an async failure is attributed to the right
+    // step — component state would be stale inside this closure's catch block.
+    let activeStep = startFromStep || "fetch";
     try {
       // Step: Fetch PDF
       let pdfBase64 = savedPdfBase64;
       if (!startFromStep || startFromStep === "fetch") {
+        activeStep = "fetch";
         const fetchResult = await runFetchStep(info, forceRefresh, selectedCandidate);
         pdfBase64 = fetchResult.pdfBase64;
 
@@ -212,11 +216,13 @@ function AppContent() {
 
       // Step: Process PDF
       if (!startFromStep || startFromStep === "fetch" || startFromStep === "process") {
+        activeStep = "process";
         await runProcessStep(pdfBase64);
       }
 
       // Step: Overview
       if (!startFromStep || startFromStep === "fetch" || startFromStep === "process" || startFromStep === "overview") {
+        activeStep = "overview";
         await runOverviewStep(pdfBase64);
       }
 
@@ -224,8 +230,7 @@ function AppContent() {
       markStepComplete("ready");
       setScreen({ name: "results" });
     } catch (error) {
-      const stepId = currentStep || failedStep || "fetch";
-      handleStepError(stepId, error);
+      handleStepError(activeStep, error);
     } finally {
       setLoading(false);
     }
