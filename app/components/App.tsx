@@ -384,6 +384,7 @@ function AppContent() {
         onSubmit={handleManualSubmit}
         onCancel={() => setScreen({ name: "landing" })}
         onAdvancedSearch={() => setScreen({ name: "manualForm", origin: "search" })}
+        onOpenCamera={() => setScreen({ name: "camera" })}
       />
     );
   }
@@ -405,7 +406,7 @@ function AppContent() {
   // Processing
   if (screen.name === "processing") {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white flex items-center justify-center p-4">
+      <div className="min-h-screen bg-bg flex items-center justify-center p-4">
         <div className="max-w-lg w-full space-y-5">
           {/* Disambiguation overlay */}
           {disambiguation && (
@@ -453,6 +454,7 @@ function AppContent() {
           onReset={handleReset}
           onDownloadPdf={downloadPdf}
           onForceRefresh={handleForceRefresh}
+          overview={overview}
         />
       }
       chat={
@@ -460,6 +462,8 @@ function AppContent() {
           pdfData={pdfData || ""}
           medicineName={medicineInfo.name}
           initialOverview={overview}
+          dosage={medicineInfo.dosage}
+          onBack={handleReset}
         />
       }
       showPdfViewer={!!pdfData}

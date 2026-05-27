@@ -18,7 +18,6 @@ const FloatingBackButton = () => {
         bg-brand hover:bg-brand-deep text-white
         px-5 py-2.5 rounded-lg shadow-1
         text-sm font-medium
-        animate-slide-up
         flex items-center gap-2
         active:scale-95 transition-transform"
     >

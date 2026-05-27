@@ -104,10 +104,12 @@
 
   @keyframes pulse-dot { 0%,100% { opacity:0.4 } 50% { opacity:1 } }
   @keyframes amber-wash { 0% { background-color: var(--color-accent-soft) } 100% { background-color: transparent } }
+  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
   .animate-amber-wash { animation: var(--animate-amber-wash); }
   .animate-pulse-dot  { animation: var(--animate-pulse-dot); }
+  .animate-fade-in    { animation: fade-in 0.15s ease-out both; }
   @media (prefers-reduced-motion: reduce) {
-    .animate-amber-wash, .animate-pulse-dot { animation: none; }
+    .animate-amber-wash, .animate-pulse-dot, .animate-fade-in { animation: none; }
   }
 
   .mb-wordmark {
