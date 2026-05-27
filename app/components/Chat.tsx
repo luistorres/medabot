@@ -77,6 +77,10 @@ const Chat = ({
   const [loading, setLoading] = useState(false);
   const [inputFocused, setInputFocused] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>(STATIC_SUGGESTIONS);
+  // Suggestions start expanded, then auto-collapse once the conversation
+  // begins (they cost too much vertical space on mobile while chatting).
+  const [suggestionsExpanded, setSuggestionsExpanded] = useState(true);
+  const hasAutoCollapsedSuggestions = useRef(false);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   // Guards against out-of-order / post-unmount suggestion updates.
@@ -142,6 +146,12 @@ const Chat = ({
   const handleAskQuestion = async (q?: string) => {
     const text = q || question;
     if (!text.trim() || !pdfData || loading) return;
+
+    // Auto-collapse the suggestions block the first time a question is asked.
+    if (!hasAutoCollapsedSuggestions.current) {
+      setSuggestionsExpanded(false);
+      hasAutoCollapsedSuggestions.current = true;
+    }
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -210,6 +220,9 @@ const Chat = ({
     setMessages(initialOverview ? [buildOverviewMessage(initialOverview)] : []);
     setQuestion("");
     setSuggestions(STATIC_SUGGESTIONS);
+    // Fresh conversation → re-expand suggestions and re-arm the auto-collapse.
+    setSuggestionsExpanded(true);
+    hasAutoCollapsedSuggestions.current = false;
   };
 
   const renderAssistantBody = (content: string) => {
@@ -402,25 +415,47 @@ const Chat = ({
         </div>
       )}
 
-      {/* Suggested questions — vertical text-link list */}
+      {/* Suggested questions — collapsible vertical text-link list */}
       {suggestions.length > 0 && (
-        <div className="flex-shrink-0 border-t border-rule bg-bg px-4 pt-3 pb-1.5">
+        <div className="flex-shrink-0 border-t border-rule bg-bg px-4 pt-2 pb-1.5">
           <div className="max-w-2xl mx-auto">
-            <p className="text-[10px] uppercase tracking-wider text-muted mb-2 font-medium">
-              Sugestões
-            </p>
-            <div className="flex flex-col gap-1.5">
-              {suggestions.map((q) => (
-                <button
-                  key={q}
-                  onClick={() => handleAskQuestion(q)}
-                  disabled={loading}
-                  className="flex items-center gap-2 text-left py-1.5 text-sm text-ink-2 hover:text-ink disabled:opacity-50 transition-colors"
-                >
-                  <Icon.arrow className="text-accent w-4 h-4 flex-shrink-0" />
-                  <span>{q}</span>
-                </button>
-              ))}
+            <button
+              type="button"
+              onClick={() => setSuggestionsExpanded((v) => !v)}
+              aria-expanded={suggestionsExpanded}
+              aria-controls="chat-suggestions"
+              className="flex items-center gap-1.5 py-1 text-[10px] uppercase tracking-wider text-muted font-medium hover:text-ink-2 transition-colors"
+            >
+              <span>Sugestões</span>
+              <Icon.chevron
+                className={`w-3 h-3 transition-transform duration-200 motion-reduce:transition-none ${
+                  suggestionsExpanded ? "rotate-90" : ""
+                }`}
+              />
+            </button>
+            <div
+              id="chat-suggestions"
+              aria-hidden={!suggestionsExpanded}
+              className={`grid transition-[grid-template-rows] duration-200 motion-reduce:transition-none ${
+                suggestionsExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+              }`}
+            >
+              <div className="overflow-hidden">
+                <div className="flex flex-col gap-1.5 pt-1">
+                  {suggestions.map((q) => (
+                    <button
+                      key={q}
+                      onClick={() => handleAskQuestion(q)}
+                      disabled={loading}
+                      tabIndex={suggestionsExpanded ? 0 : -1}
+                      className="flex items-center gap-2 text-left py-1.5 text-sm text-ink-2 hover:text-ink disabled:opacity-50 transition-colors"
+                    >
+                      <Icon.arrow className="text-accent w-4 h-4 flex-shrink-0" />
+                      <span>{q}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>
