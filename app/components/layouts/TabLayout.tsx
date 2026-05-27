@@ -43,7 +43,7 @@ const TabLayout = ({
   chat,
   showPdfViewer,
 }: TabLayoutProps) => {
-  const { activeTab, setActiveTab } = usePDF();
+  const { activeTab, setActiveTab, setCameFromChat } = usePDF();
 
   const tabs = [
     { id: "chat" as TabType, label: "Chat", Icon: ChatIcon, show: true },
@@ -87,7 +87,7 @@ const TabLayout = ({
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => { setActiveTab(tab.id); if (tab.id === "chat") setCameFromChat(false); }}
                 className={`flex-1 flex flex-col items-center justify-center py-2 min-h-[56px] transition-colors ${
                   isActive
                     ? "text-primary-600"

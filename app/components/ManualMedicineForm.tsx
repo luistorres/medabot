@@ -4,12 +4,14 @@ import { IdentifyMedicineResponse } from "../core/identify";
 interface ManualMedicineFormProps {
   onSubmit: (data: IdentifyMedicineResponse) => void;
   onCancel: () => void;
+  onCancelToLanding?: () => void;
   initialData?: Partial<IdentifyMedicineResponse>;
 }
 
 const ManualMedicineForm = ({
   onSubmit,
   onCancel,
+  onCancelToLanding,
   initialData,
 }: ManualMedicineFormProps) => {
   const [formData, setFormData] = useState<IdentifyMedicineResponse>({
@@ -220,18 +222,17 @@ const ManualMedicineForm = ({
           </form>
         </div>
 
-        {/* Alternative Option */}
-        <div className="text-center mt-6">
-          <p className="text-sm text-gray-600">
-            Prefere digitalizar a embalagem?{" "}
+        {/* Direct path back to landing */}
+        {onCancelToLanding && (
+          <div className="text-center mt-6">
             <button
-              onClick={onCancel}
-              className="text-blue-600 hover:text-blue-700 font-medium"
+              onClick={onCancelToLanding}
+              className="text-sm text-gray-500 hover:text-gray-700 font-medium"
             >
-              Usar câmara
+              Voltar ao início
             </button>
-          </p>
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

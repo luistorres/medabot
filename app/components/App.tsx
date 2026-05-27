@@ -67,6 +67,8 @@ function AppContent() {
   const [failedStep, setFailedStep] = useState<string>("");
   const [searchMessage, setSearchMessage] = useState<string>("");
   const [disambiguation, setDisambiguation] = useState<Candidate[] | null>(null);
+  // Tracks where manualForm was entered from: "search" → cancel goes back to search; "disambiguation" → cancel goes to landing
+  const [manualFormOrigin, setManualFormOrigin] = useState<"search" | "disambiguation">("search");
 
   const { pdfData, setPdfData, setCurrentPage, setTotalPages } = usePDF();
 
@@ -298,6 +300,7 @@ function AppContent() {
     setFailedStep("");
     setDisambiguation(null);
     setSearchMessage("");
+    setManualFormOrigin("search");
   };
 
   // Force refresh — re-fetch leaflet from INFARMED, bypassing cache
@@ -347,6 +350,7 @@ function AppContent() {
       <Camera
         onCapture={handleCapture}
         onCancel={() => setCurrentScreen("landing")}
+        onManualEntry={() => setCurrentScreen("search")}
       />
     );
   }
@@ -357,7 +361,10 @@ function AppContent() {
       <SearchScreen
         onSubmit={handleManualSubmit}
         onCancel={() => setCurrentScreen("landing")}
-        onAdvancedSearch={() => setCurrentScreen("manualForm")}
+        onAdvancedSearch={() => {
+          setManualFormOrigin("search");
+          setCurrentScreen("manualForm");
+        }}
       />
     );
   }
@@ -367,7 +374,9 @@ function AppContent() {
     return (
       <ManualMedicineForm
         onSubmit={handleManualSubmit}
-        onCancel={() => setCurrentScreen("search")}
+        onCancel={() => manualFormOrigin === "search" ? setCurrentScreen("search") : setCurrentScreen("landing")}
+        onCancelToLanding={handleReset}
+        initialData={manualFormOrigin === "disambiguation" ? medicineInfo : undefined}
       />
     );
   }
@@ -384,6 +393,7 @@ function AppContent() {
               onSelect={handleDisambiguationSelect}
               onNoneMatch={() => {
                 setDisambiguation(null);
+                setManualFormOrigin("disambiguation");
                 setCurrentScreen("manualForm");
               }}
             />
@@ -401,7 +411,7 @@ function AppContent() {
               searchMessage={searchMessage}
               onRetryStep={handleRetryStep}
               onGoToCamera={() => setCurrentScreen("camera")}
-              onGoToManualForm={() => setCurrentScreen("manualForm")}
+              onGoToManualForm={() => { setManualFormOrigin("search"); setCurrentScreen("manualForm"); }}
               onReset={handleReset}
             />
           )}

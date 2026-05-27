@@ -1,27 +1,13 @@
-import { useEffect, useState } from "react";
 import { usePDF } from "../../context/PDFContext";
 
 const FloatingBackButton = () => {
   const { cameFromChat, setCameFromChat, setActiveTab } = usePDF();
-  const [visible, setVisible] = useState(false);
 
-  useEffect(() => {
-    if (cameFromChat) {
-      setVisible(true);
-      const timer = setTimeout(() => {
-        setVisible(false);
-        setCameFromChat(false);
-      }, 10000);
-      return () => clearTimeout(timer);
-    }
-  }, [cameFromChat, setCameFromChat]);
-
-  if (!visible) return null;
+  if (!cameFromChat) return null;
 
   const handleClick = () => {
     setActiveTab("chat");
     setCameFromChat(false);
-    setVisible(false);
   };
 
   return (

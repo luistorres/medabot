@@ -4,9 +4,10 @@ import Webcam from "react-webcam";
 interface CameraProps {
   onCapture: (imageSrc: string) => void;
   onCancel?: () => void;
+  onManualEntry?: () => void;
 }
 
-const Camera = ({ onCapture, onCancel }: CameraProps) => {
+const Camera = ({ onCapture, onCancel, onManualEntry }: CameraProps) => {
   const webcamRef = useRef<Webcam>(null);
   const [flash, setFlash] = useState(false);
 
@@ -94,9 +95,9 @@ const Camera = ({ onCapture, onCancel }: CameraProps) => {
       <div className="flex-shrink-0 bg-black/80 pb-[env(safe-area-inset-bottom)]">
         <div className="flex items-center justify-center py-6 gap-8">
           {/* Manual entry link */}
-          {onCancel && (
+          {(onManualEntry || onCancel) && (
             <button
-              onClick={onCancel}
+              onClick={onManualEntry ?? onCancel}
               className="text-white/60 text-xs font-medium hover:text-white/80 min-h-[44px] flex items-center"
             >
               Introduzir<br/>manualmente
