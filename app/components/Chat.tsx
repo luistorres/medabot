@@ -256,7 +256,7 @@ const Chat = ({
               <button
                 onClick={onBack}
                 className="flex items-center justify-center min-w-[40px] min-h-[40px] -ml-2 text-ink-2 hover:text-ink transition-colors"
-                aria-label="Voltar"
+                aria-label="Início"
               >
                 <Icon.back className="w-[18px] h-[18px]" />
               </button>

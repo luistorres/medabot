@@ -95,11 +95,12 @@
   }
 
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    @apply bg-gray-200 rounded-full;
+    background-color: var(--color-faint);
+    @apply rounded-full;
   }
 
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    @apply bg-gray-300;
+    background-color: var(--color-muted);
   }
 
   @keyframes pulse-dot { 0%,100% { opacity:0.4 } 50% { opacity:1 } }
