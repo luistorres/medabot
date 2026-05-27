@@ -1,10 +1,18 @@
 import { useState, useRef, useEffect } from "react";
 import { queryLeafletPdf } from "../server/queryLeaflet";
+import { suggestFollowUps } from "../server/suggestFollowUps";
 import { usePDF } from "../context/PDFContext";
 import { useScrollToBottom } from "../hooks/useScrollToBottom";
+import { useMediaQuery } from "../hooks/useMediaQuery";
+import { useRotatingPlaceholder } from "../hooks/useRotatingPlaceholder";
 import { parseMessageWithReferences } from "../utils/parseReferences";
 import { formatMessage } from "../utils/formatMessage";
-import Chip from "./ui/Chip";
+import { isNotFoundAnswer } from "../utils/isNotFoundAnswer";
+import Button from "./ui/Button";
+import { Wordmark } from "./ui/Wordmark";
+import { Icon } from "./ui/Icon";
+import { SourceBadge } from "./ui/SourceBadge";
+import { CitationRow } from "./ui/Citation";
 
 interface ChatMessage {
   id: string;
@@ -21,44 +29,63 @@ interface ChatProps {
   pdfData: string;
   medicineName: string;
   initialOverview?: string;
+  onBack?: () => void;
+  dosage?: string;
 }
+
+const STATIC_SUGGESTIONS = [
+  "Quais são os efeitos secundários?",
+  "Como devo tomar este medicamento?",
+  "Quais são as contraindicações?",
+];
+
+const PLACEHOLDER_PROMPTS = [
+  "Posso tomar com café?",
+  "E se for grávida?",
+  "Há interações com álcool?",
+];
 
 const TypingDots = () => (
   <div className="flex items-center gap-1 px-1 py-1">
     {[0, 1, 2].map((i) => (
       <span
         key={i}
-        className="w-2 h-2 bg-gray-400 rounded-full animate-typing-dots"
+        className="w-2 h-2 bg-faint rounded-full animate-typing-dots"
         style={{ animationDelay: `${i * 0.2}s` }}
       />
     ))}
   </div>
 );
 
-/**
- * Detects if the assistant's answer is a "not found in leaflet" response.
- * The backend prompt instructs the model to reply with this phrasing when
- * the information is not in the leaflet.
- */
-function isNotFoundAnswer(content: string): boolean {
-  const lower = content.toLowerCase();
-  return (
-    lower.includes("não encontro essa informação no folheto") ||
-    lower.includes("não encontrei essa informação no folheto") ||
-    lower.includes("não consta no folheto")
-  );
-}
+const buildOverviewMessage = (overview: string): ChatMessage => ({
+  id: "overview",
+  type: "assistant",
+  content: overview,
+  timestamp: new Date(),
+  isOverview: true,
+});
 
-const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
+const Chat = ({
+  pdfData,
+  medicineName,
+  initialOverview,
+  onBack,
+  dosage,
+}: ChatProps) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
-  const [suggestionsOpen, setSuggestionsOpen] = useState(true);
-  const [hasInteracted, setHasInteracted] = useState(false);
+  const [inputFocused, setInputFocused] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>(STATIC_SUGGESTIONS);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const { jumpToPage } = usePDF();
+  const isDesktop = useMediaQuery("(min-width: 64rem)");
+  const placeholder = useRotatingPlaceholder(
+    PLACEHOLDER_PROMPTS,
+    !inputFocused && question.length === 0
+  );
   const { showScrollButton, isAtBottom, scrollToBottom } = useScrollToBottom(
     messagesContainerRef as React.RefObject<HTMLDivElement>,
     { threshold: 150 }
@@ -67,15 +94,7 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
   // Add initial overview as first message
   useEffect(() => {
     if (initialOverview && messages.length === 0) {
-      setMessages([
-        {
-          id: "overview",
-          type: "assistant",
-          content: initialOverview,
-          timestamp: new Date(),
-          isOverview: true,
-        },
-      ]);
+      setMessages([buildOverviewMessage(initialOverview)]);
     }
   }, [initialOverview]);
 
@@ -88,6 +107,22 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
       }
     }
   }, [messages]);
+
+  // Refresh suggested follow-up questions after each assistant answer.
+  const refreshSuggestions = async (lastAnswer: string) => {
+    try {
+      const result = await suggestFollowUps({
+        data: { lastAnswer, medicineName },
+      });
+      if (Array.isArray(result) && result.length > 0) {
+        setSuggestions(result);
+      } else {
+        setSuggestions(STATIC_SUGGESTIONS);
+      }
+    } catch {
+      setSuggestions(STATIC_SUGGESTIONS);
+    }
+  };
 
   const handleAskQuestion = async (q?: string) => {
     const text = q || question;
@@ -103,12 +138,6 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
     setMessages((prev) => [...prev, userMessage]);
     setQuestion("");
     setLoading(true);
-
-    // Collapse suggestions after first interaction
-    if (!hasInteracted) {
-      setHasInteracted(true);
-      setSuggestionsOpen(false);
-    }
 
     try {
       const result = await queryLeafletPdf({
@@ -127,6 +156,8 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
           sourcePages: result.pageNumbers,
         };
         setMessages((prev) => [...prev, assistantMessage]);
+        // Refresh suggestions based on the latest answer.
+        void refreshSuggestions(result.answer);
       } else {
         // Backend reported failure without throwing — surface the same
         // retry-able error bubble as a thrown error rather than going silent.
@@ -156,192 +187,171 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
     }
   };
 
-  const sampleQuestions = [
-    "Quais são os efeitos secundários?",
-    "Como devo tomar este medicamento?",
-    "Quais são as contraindicações?",
-  ];
-
-  const handlePageReferenceClick = (pageNumber: number) => {
-    jumpToPage(pageNumber);
+  // Refazer — reset the conversation to just the seed overview (or empty).
+  const handleRefazer = () => {
+    setMessages(initialOverview ? [buildOverviewMessage(initialOverview)] : []);
+    setQuestion("");
+    setSuggestions(STATIC_SUGGESTIONS);
   };
 
-  const renderMessageContent = (message: ChatMessage) => {
-    if (message.type === "user") {
-      return <div className="text-sm leading-relaxed">{message.content}</div>;
-    }
-
-    if (message.type === "error") {
-      return (
-        <div className="text-sm leading-relaxed space-y-2">
-          <p className="text-error-700">{message.content}</p>
-          {message.retryQuestion && (
-            <button
-              onClick={() => handleAskQuestion(message.retryQuestion)}
-              disabled={loading}
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-primary-600 hover:text-primary-700 disabled:opacity-50 transition-colors"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
-              </svg>
-              Tentar novamente
-            </button>
-          )}
-        </div>
-      );
-    }
-
-    const notFound = isNotFoundAnswer(message.content);
-
-    // "Not found" answers get a distinct muted note style
-    if (notFound) {
-      return (
-        <div className="flex items-start gap-2">
-          <svg
-            className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            strokeWidth={1.5}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
-            />
-          </svg>
-          <p className="text-sm leading-relaxed text-gray-500 italic">
-            {message.content}
-          </p>
-        </div>
-      );
-    }
-
-    // Format with markdown, then parse for page references
-    const formatted = formatMessage(message.content);
+  const renderAssistantBody = (content: string) => {
+    const formatted = formatMessage(content);
     return (
-      <div className="text-sm leading-relaxed space-y-1">
+      <div className="font-serif text-[15px] leading-[1.6] text-ink space-y-1">
         {formatted.map((node, i) => {
           if (typeof node === "string") {
             return (
               <span key={i}>
                 {parseMessageWithReferences(node, {
-                  onPageClick: handlePageReferenceClick,
+                  onPageClick: jumpToPage,
                 })}
               </span>
             );
           }
-          // For React elements (p, ul, ol etc.), we need to check if their children contain references
           return node;
         })}
       </div>
     );
   };
 
-  // Whether the chat is still empty (overview not loaded yet, no messages)
-  const showEmptyState = messages.length === 0 && !loading;
-
   return (
-    <div className="bg-white flex flex-col h-full">
-      {/* Provenance banner */}
-      <div className="px-4 py-2.5 bg-primary-50 border-b border-primary-100 flex-shrink-0">
-        <p className="text-xs text-primary-700 text-center font-medium">
-          Fonte: folheto informativo oficial (INFARMED) —{" "}
-          <span className="font-semibold">{medicineName}</span>
-        </p>
-      </div>
+    <div className="bg-bg flex flex-col h-full">
+      {/* Header — two rows */}
+      <header className="flex-shrink-0 border-b border-rule bg-bg px-4 pt-3.5 pb-3">
+        {/* Row 1 — hidden on desktop */}
+        {!isDesktop && (
+          <div className="flex items-center justify-between mb-1.5">
+            {onBack ? (
+              <button
+                onClick={onBack}
+                className="flex items-center text-ink-2 hover:text-ink transition-colors"
+                aria-label="Voltar"
+              >
+                <Icon.back className="w-[18px] h-[18px]" />
+              </button>
+            ) : (
+              <span className="w-[18px]" aria-hidden />
+            )}
+            <Wordmark size={16} />
+            <button
+              onClick={handleRefazer}
+              className="text-[12px] font-medium text-muted hover:text-ink-2 transition-colors"
+            >
+              Refazer
+            </button>
+          </div>
+        )}
 
-      {/* Messages */}
+        {/* Row 2 — always shown */}
+        <div className="flex items-baseline justify-between gap-3">
+          <h1 className="min-w-0 truncate">
+            <span className="font-serif text-[22px] text-ink tracking-[-0.005em]">
+              {medicineName}
+            </span>
+            {dosage && (
+              <span className="ml-2 font-mono text-[13px] text-muted">
+                {dosage}
+              </span>
+            )}
+          </h1>
+          <SourceBadge medicine={medicineName} />
+        </div>
+      </header>
+
+      {/* Conversation */}
       <div
         ref={messagesContainerRef}
-        className="flex-1 overflow-y-auto px-4 pt-4 pb-2 min-h-0 scrollbar-thin"
+        className="flex-1 overflow-y-auto px-4 pt-5 pb-2 min-h-0 scrollbar-thin"
       >
-        <div className="max-w-2xl mx-auto space-y-1">
-          {/* Empty state — before any message (overview not loaded yet) */}
-          {showEmptyState && (
-            <div className="flex flex-col items-center justify-center py-10 text-center animate-fade-in">
-              <div className="w-12 h-12 rounded-full bg-primary-50 flex items-center justify-center mb-3">
-                <svg className="w-6 h-6 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" />
-                </svg>
-              </div>
-              <p className="text-sm font-medium text-gray-600 mb-1">Pronto para responder</p>
-              <p className="text-xs text-gray-400 max-w-[220px]">
-                Faça uma pergunta sobre {medicineName} — as respostas vêm sempre do folheto oficial.
+        <div className="max-w-2xl mx-auto flex flex-col gap-5">
+          {/* Empty state — no messages yet */}
+          {messages.length === 0 && !loading && (
+            <div className="flex flex-col items-center justify-center py-12 text-center animate-fade-in">
+              <Icon.search className="w-7 h-7 text-faint mb-3" />
+              <p className="text-sm text-muted max-w-[260px]">
+                Pergunte o que precisar sobre {medicineName}.
               </p>
             </div>
           )}
 
-          {messages.map((message, index) => {
-            const prevMessage = index > 0 ? messages[index - 1] : null;
-            const sameSender = prevMessage?.type === message.type;
-            const spacing = sameSender ? "mt-1" : "mt-4";
-            const notFound =
-              message.type === "assistant" && isNotFoundAnswer(message.content);
-
-            return (
-              <div
-                key={message.id}
-                className={`flex ${message.type === "user" ? "justify-end" : "justify-start"} ${index === 0 ? "" : spacing} animate-fade-in`}
-              >
-                <div
-                  className={`max-w-[85%] md:max-w-[75%] ${
-                    message.type === "user"
-                      ? "bg-primary-600 text-white rounded-2xl rounded-br-md px-4 py-2.5 shadow-sm"
-                      : message.type === "error"
-                        ? "bg-error-50 text-gray-800 rounded-2xl rounded-bl-md px-4 py-2.5 border border-error-100"
-                        : notFound
-                          ? "bg-gray-50 text-gray-500 rounded-2xl rounded-bl-md px-4 py-2.5 border border-dashed border-gray-200"
-                          : "bg-gray-100 text-gray-800 rounded-2xl rounded-bl-md px-4 py-2.5"
-                  }`}
-                >
-                  {renderMessageContent(message)}
-
-                  {/* Source attribution for assistant messages */}
-                  {message.type === "assistant" && !notFound && (
-                    <div className="mt-2 pt-1.5 border-t border-gray-200">
-                      {message.sourcePages && message.sourcePages.length > 0 ? (
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="text-xs text-gray-400">Folheto, p.</span>
-                          {message.sourcePages.map((page) => (
-                            <button
-                              key={page}
-                              onClick={() => handlePageReferenceClick(page)}
-                              className="inline-flex items-center px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 text-xs font-medium ring-1 ring-primary-200 hover:bg-primary-100 transition-colors"
-                              aria-label={`Ir para página ${page} do folheto`}
-                            >
-                              {page}
-                            </button>
-                          ))}
-                        </div>
-                      ) : message.isOverview ? (
-                        <p className="text-xs text-gray-400">
-                          Com base no folheto informativo oficial
-                        </p>
-                      ) : null}
-                    </div>
-                  )}
-
-                  <p
-                    className={`text-xs mt-1 ${
-                      message.type === "user" ? "text-primary-200" : "text-gray-400"
-                    }`}
+          {messages.map((message) => {
+            // User message — small right-aligned bubble
+            if (message.type === "user") {
+              return (
+                <div key={message.id} className="flex justify-end animate-fade-in">
+                  <div
+                    className="bg-brand-soft text-brand-ink px-3.5 py-2.5 max-w-[78%] leading-snug text-[14.5px] font-medium"
+                    style={{ borderRadius: "16px 16px 4px 16px" }}
                   >
-                    {message.timestamp.toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </p>
+                    {message.content}
+                  </div>
                 </div>
+              );
+            }
+
+            // Error message — error-soft box with retry link
+            if (message.type === "error") {
+              return (
+                <div
+                  key={message.id}
+                  className="bg-error-soft text-error rounded-lg p-3 text-sm leading-relaxed animate-fade-in"
+                >
+                  <p>
+                    Não foi possível obter uma resposta. Pode tentar novamente.
+                  </p>
+                  {message.retryQuestion && (
+                    <Button
+                      variant="link"
+                      onClick={() => handleAskQuestion(message.retryQuestion)}
+                      disabled={loading}
+                      className="mt-1.5 inline-flex items-center gap-1.5"
+                    >
+                      <Icon.refresh className="w-3.5 h-3.5" />
+                      Tentar novamente
+                    </Button>
+                  )}
+                </div>
+              );
+            }
+
+            // Assistant — "not found" answer gets the dashed note treatment
+            if (isNotFoundAnswer(message.content)) {
+              return (
+                <div
+                  key={message.id}
+                  className="flex items-start gap-2 border border-dashed border-border bg-tint/60 rounded-lg p-3 italic text-ink-2 animate-fade-in"
+                >
+                  <Icon.search className="w-4 h-4 text-muted mt-0.5 flex-shrink-0" />
+                  <p className="text-sm leading-relaxed">{message.content}</p>
+                </div>
+              );
+            }
+
+            // Assistant — document-as-conversation (vertical brand rule, no bubble)
+            return (
+              <div key={message.id} className="relative pl-4 animate-fade-in">
+                <div
+                  className="absolute left-0 top-1 bottom-1 w-0.5 bg-brand rounded-sm"
+                  style={{ opacity: message.isOverview ? 1 : 0.4 }}
+                />
+                {message.isOverview && (
+                  <p className="text-[11px] uppercase tracking-wider text-brand mb-2 font-medium">
+                    Resumo do folheto
+                  </p>
+                )}
+                {renderAssistantBody(message.content)}
+                <CitationRow
+                  pages={message.sourcePages ?? []}
+                  onJump={jumpToPage}
+                />
               </div>
             );
           })}
 
           {loading && (
-            <div className="flex justify-start mt-4 animate-fade-in">
-              <div className="bg-gray-100 text-gray-800 rounded-2xl rounded-bl-md px-4 py-2.5">
-                <TypingDots />
-              </div>
+            <div className="relative pl-4 animate-fade-in">
+              <div className="absolute left-0 top-1 bottom-1 w-0.5 bg-brand/40 rounded-sm" />
+              <TypingDots />
             </div>
           )}
 
@@ -354,7 +364,7 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
         <div className="relative">
           <button
             onClick={() => scrollToBottom("smooth")}
-            className="absolute bottom-2 right-4 bg-white hover:bg-gray-50 text-gray-600 p-2.5 rounded-full shadow-lg border border-gray-200 transition-all z-10"
+            className="absolute bottom-2 right-4 bg-paper hover:bg-tint text-ink-2 p-2.5 rounded-full shadow-lg border border-border transition-all z-10"
             aria-label="Ir para o fim"
           >
             <svg
@@ -374,88 +384,59 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
         </div>
       )}
 
-      {/* Suggested questions — collapsible */}
-      <div className="flex-shrink-0 border-t border-gray-100">
-        {/* Toggle bar — only shows after first interaction */}
-        {hasInteracted && (
-          <button
-            onClick={() => setSuggestionsOpen((v) => !v)}
-            className="w-full flex items-center gap-2 px-4 py-2 text-xs text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 0 0 1.5-.189m-1.5.189a6.01 6.01 0 0 1-1.5-.189m3.75 7.478a12.06 12.06 0 0 1-4.5 0m3.75 2.383a14.406 14.406 0 0 1-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 1 0-7.517 0c.85.493 1.509 1.333 1.509 2.316V18" />
-            </svg>
-            <span className="font-medium">Sugestões de perguntas</span>
-            <svg
-              className={`w-3 h-3 ml-auto transition-transform duration-200 ${suggestionsOpen ? "rotate-180" : ""}`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              strokeWidth={2.5}
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 15.75 7.5-7.5 7.5 7.5" />
-            </svg>
-          </button>
-        )}
-
-        {/* Chips — animated open/close */}
-        <div
-          className={`overflow-hidden transition-all duration-250 ease-in-out ${
-            suggestionsOpen ? "max-h-40 opacity-100" : "max-h-0 opacity-0"
-          }`}
-        >
-          <div className="px-4 pb-2 pt-1">
-            <div className="max-w-2xl mx-auto flex flex-wrap gap-2">
-              {sampleQuestions.map((sampleQ) => (
-                <Chip
-                  key={sampleQ}
-                  onClick={() => handleAskQuestion(sampleQ)}
-                  className="text-xs"
+      {/* Suggested questions — vertical text-link list */}
+      {suggestions.length > 0 && (
+        <div className="flex-shrink-0 border-t border-rule bg-bg px-4 pt-3 pb-1.5">
+          <div className="max-w-2xl mx-auto">
+            <p className="text-[10px] uppercase tracking-wider text-muted mb-2 font-medium">
+              Sugestões
+            </p>
+            <div className="flex flex-col gap-1.5">
+              {suggestions.map((q) => (
+                <button
+                  key={q}
+                  onClick={() => handleAskQuestion(q)}
+                  disabled={loading}
+                  className="flex items-center gap-2 text-left py-1.5 text-sm text-ink-2 hover:text-ink disabled:opacity-50 transition-colors"
                 >
-                  {sampleQ}
-                </Chip>
+                  <Icon.arrow className="text-accent w-4 h-4 flex-shrink-0" />
+                  <span>{q}</span>
+                </button>
               ))}
             </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Input */}
-      <div className="px-4 pb-2 pt-2 flex-shrink-0">
-        <div className="max-w-2xl mx-auto flex gap-2">
-          <input
-            type="text"
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            placeholder="Escreva a sua pergunta aqui..."
-            className="flex-grow min-h-[44px] px-4 text-sm bg-gray-100 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent focus:bg-white transition-colors"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleAskQuestion();
-              }
-            }}
-            disabled={loading}
-          />
-          <button
-            onClick={() => handleAskQuestion()}
-            disabled={loading || !question.trim()}
-            className="min-h-[44px] min-w-[44px] flex items-center justify-center bg-primary-600 text-white rounded-xl hover:bg-primary-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-            aria-label="Enviar pergunta"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      {/* Persistent medical disclaimer */}
-      <div className="px-4 pb-4 flex-shrink-0">
+      {/* Composer */}
+      <div className="flex-shrink-0 bg-bg px-4 pb-3 pt-2.5">
         <div className="max-w-2xl mx-auto">
-          <p className="text-[11px] text-gray-400 text-center leading-snug">
-            O MedaBot ajuda a perceber o folheto. Não substitui o aconselhamento do seu médico ou farmacêutico.
-          </p>
+          <div className="flex items-center gap-2 bg-paper border border-border rounded-lg pl-3.5 pr-1.5 py-1.5">
+            <input
+              type="text"
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              onFocus={() => setInputFocused(true)}
+              onBlur={() => setInputFocused(false)}
+              placeholder={placeholder}
+              className="flex-grow min-w-0 bg-transparent border-0 text-[15px] text-ink placeholder:text-muted focus:outline-none py-1.5"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleAskQuestion();
+                }
+              }}
+              disabled={loading}
+            />
+            <button
+              onClick={() => handleAskQuestion()}
+              disabled={loading || !question.trim()}
+              className="flex items-center justify-center w-9 h-9 bg-brand text-white rounded-sm hover:bg-brand-deep disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+              aria-label="Enviar pergunta"
+            >
+              <Icon.send className="w-[18px] h-[18px]" />
+            </button>
+          </div>
         </div>
       </div>
     </div>
