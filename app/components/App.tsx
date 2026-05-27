@@ -78,7 +78,7 @@ function AppContent() {
   const [searchMessage, setSearchMessage] = useState<string>("");
   const [disambiguation, setDisambiguation] = useState<Candidate[] | null>(null);
 
-  const { pdfData, setPdfData, setCurrentPage, setTotalPages, setCameFromChat, setActiveTab, setIsPdfViewerOpen } = usePDF();
+  const { pdfData, setPdfData, setCurrentPage, setTotalPages, setCameFromChat, setActiveTab, setIsPdfViewerOpen, setLastJumpedPage } = usePDF();
 
   // Saved intermediate results for retry
   const [savedPdfBase64, setSavedPdfBase64] = useState<string | null>(null);
@@ -174,9 +174,9 @@ function AppContent() {
   // Process medicine info (per-step error handling)
   const processMedicineInfo = async (
     info: IdentifyMedicineResponse,
-    opts: { startFromStep?: string; forceRefresh?: boolean; selectedCandidate?: Candidate; skipIdentify?: boolean } = {},
+    opts: { startFromStep?: string; forceRefresh?: boolean; selectedCandidate?: Candidate } = {},
   ) => {
-    const { startFromStep, forceRefresh, selectedCandidate, skipIdentify = false } = opts;
+    const { startFromStep, forceRefresh, selectedCandidate } = opts;
     setMedicineInfo(info);
     setScreen({ name: "processing" });
     setLoading(true);
@@ -185,12 +185,11 @@ function AppContent() {
     setDisambiguation(null);
 
     if (!startFromStep) {
-      setCompletedSteps([]);
+      // "identify" is complete by the time we reach here: the camera flow already
+      // ran it, and non-camera entries (search/manual) have no photo step. Seed it
+      // so its checkmark survives this fresh-run reset instead of being wiped.
+      setCompletedSteps(["identify"]);
       setCurrentStep("");
-      // Camera flow marks "identify" itself; every other entry auto-completes it
-      if (!skipIdentify) {
-        markStepComplete("identify");
-      }
     }
 
     try {
@@ -236,10 +235,17 @@ function AppContent() {
   const handleRetryStep = async (stepId: string) => {
     setProcessingError("");
     setFailedStep("");
-    setLoading(true);
 
-    // processMedicineInfo handles its own errors via handleStepError.
+    // Identify can only be retried with a new photo — send the user back to the
+    // camera rather than leaving them stuck on a dead spinner.
+    if (stepId === "identify") {
+      setScreen({ name: "camera" });
+      return;
+    }
+
     if (stepId === "fetch" || stepId === "process" || stepId === "overview") {
+      setLoading(true);
+      // processMedicineInfo handles its own errors via handleStepError.
       await processMedicineInfo(medicineInfo, { startFromStep: stepId });
     }
   };
@@ -261,7 +267,7 @@ function AppContent() {
       setMedicineInfo(info);
       markStepComplete("identify");
 
-      await processMedicineInfo(info, { skipIdentify: true });
+      await processMedicineInfo(info);
     } catch (error) {
       handleStepError("identify", error);
     }
@@ -311,6 +317,7 @@ function AppContent() {
     setCameFromChat(false);
     setActiveTab("chat");
     setIsPdfViewerOpen(false);
+    setLastJumpedPage(null);
   };
 
   // Force refresh — re-fetch leaflet from INFARMED, bypassing cache
