@@ -17,7 +17,17 @@ import { PDFProvider, usePDF } from "../context/PDFContext";
 import { extractMedicineSummary, type MedicineSummary } from "../server/extractMedicineSummary";
 import type { Candidate } from "./DisambiguationCard";
 
-type AppScreen = "landing" | "camera" | "search" | "manualForm" | "processing" | "results";
+// Screen-payload navigation model: each screen carries the state it needs as
+// part of the transition. manualForm carries its origin (where "back" returns
+// to) and any prefill data, so that information travels with the navigation
+// instead of living in ambient state that can leak between flows.
+type Screen =
+  | { name: "landing" }
+  | { name: "camera" }
+  | { name: "search" }
+  | { name: "manualForm"; origin: "search" | "disambiguation"; initialData?: IdentifyMedicineResponse }
+  | { name: "processing" }
+  | { name: "results" };
 
 const steps = [
   {
@@ -48,7 +58,7 @@ const steps = [
 ];
 
 function AppContent() {
-  const [currentScreen, setCurrentScreen] = useState<AppScreen>("landing");
+  const [screen, setScreen] = useState<Screen>({ name: "landing" });
   const [image, setImage] = useState<string | null>(null);
   const [medicineInfo, setMedicineInfo] = useState<IdentifyMedicineResponse>({
     name: "",
@@ -67,8 +77,6 @@ function AppContent() {
   const [failedStep, setFailedStep] = useState<string>("");
   const [searchMessage, setSearchMessage] = useState<string>("");
   const [disambiguation, setDisambiguation] = useState<Candidate[] | null>(null);
-  // Tracks where manualForm was entered from: "search" → cancel goes back to search; "disambiguation" → cancel goes to landing
-  const [manualFormOrigin, setManualFormOrigin] = useState<"search" | "disambiguation">("search");
 
   const { pdfData, setPdfData, setCurrentPage, setTotalPages } = usePDF();
 
@@ -165,8 +173,9 @@ function AppContent() {
 
   // Process medicine info (per-step error handling)
   const processMedicineInfo = async (info: IdentifyMedicineResponse, startFromStep?: string, forceRefresh?: boolean, selectedCandidate?: Candidate) => {
+    const cameFromCamera = screen.name === "camera";
     setMedicineInfo(info);
-    setCurrentScreen("processing");
+    setScreen({ name: "processing" });
     setLoading(true);
     setProcessingError("");
     setFailedStep("");
@@ -176,7 +185,7 @@ function AppContent() {
       setCompletedSteps([]);
       setCurrentStep("");
       // Skip identify step if not coming from camera
-      if (currentScreen !== "camera") {
+      if (!cameFromCamera) {
         markStepComplete("identify");
       }
     }
@@ -211,7 +220,7 @@ function AppContent() {
 
       // Ready
       markStepComplete("ready");
-      setCurrentScreen("results");
+      setScreen({ name: "results" });
     } catch (error) {
       const stepId = currentStep || failedStep || "fetch";
       handleStepError(stepId, error);
@@ -250,7 +259,7 @@ function AppContent() {
 
     try {
       setCurrentStep("identify");
-      setCurrentScreen("processing");
+      setScreen({ name: "processing" });
 
       const info = await performIdentify({ data: imgSrc });
       setMedicineInfo(info);
@@ -285,7 +294,7 @@ function AppContent() {
 
   // Reset to landing
   const handleReset = () => {
-    setCurrentScreen("landing");
+    setScreen({ name: "landing" });
     setImage(null);
     setMedicineInfo({ name: "", activeSubstance: "", brand: "", dosage: "", pharmaceuticalForm: undefined, titular: undefined });
     setPdfData(null);
@@ -300,7 +309,6 @@ function AppContent() {
     setFailedStep("");
     setDisambiguation(null);
     setSearchMessage("");
-    setManualFormOrigin("search");
   };
 
   // Force refresh — re-fetch leaflet from INFARMED, bypassing cache
@@ -335,54 +343,52 @@ function AppContent() {
   };
 
   // Landing
-  if (currentScreen === "landing") {
+  if (screen.name === "landing") {
     return (
       <LandingPage
-        onScanMedicine={() => setCurrentScreen("camera")}
-        onManualEntry={() => setCurrentScreen("search")}
+        onScanMedicine={() => setScreen({ name: "camera" })}
+        onManualEntry={() => setScreen({ name: "search" })}
       />
     );
   }
 
   // Camera
-  if (currentScreen === "camera") {
+  if (screen.name === "camera") {
     return (
       <Camera
         onCapture={handleCapture}
-        onCancel={() => setCurrentScreen("landing")}
-        onManualEntry={() => setCurrentScreen("search")}
+        onCancel={() => setScreen({ name: "landing" })}
+        onManualEntry={() => setScreen({ name: "search" })}
       />
     );
   }
 
   // Smart search
-  if (currentScreen === "search") {
+  if (screen.name === "search") {
     return (
       <SearchScreen
         onSubmit={handleManualSubmit}
-        onCancel={() => setCurrentScreen("landing")}
-        onAdvancedSearch={() => {
-          setManualFormOrigin("search");
-          setCurrentScreen("manualForm");
-        }}
+        onCancel={() => setScreen({ name: "landing" })}
+        onAdvancedSearch={() => setScreen({ name: "manualForm", origin: "search" })}
       />
     );
   }
 
   // Manual form (advanced search)
-  if (currentScreen === "manualForm") {
+  if (screen.name === "manualForm") {
+    const cancelTo: Screen = screen.origin === "search" ? { name: "search" } : { name: "landing" };
     return (
       <ManualMedicineForm
         onSubmit={handleManualSubmit}
-        onCancel={() => manualFormOrigin === "search" ? setCurrentScreen("search") : setCurrentScreen("landing")}
+        onCancel={() => setScreen(cancelTo)}
         onCancelToLanding={handleReset}
-        initialData={manualFormOrigin === "disambiguation" ? medicineInfo : undefined}
+        initialData={screen.initialData}
       />
     );
   }
 
   // Processing
-  if (currentScreen === "processing") {
+  if (screen.name === "processing") {
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white flex items-center justify-center p-4">
         <div className="max-w-lg w-full space-y-5">
@@ -393,8 +399,7 @@ function AppContent() {
               onSelect={handleDisambiguationSelect}
               onNoneMatch={() => {
                 setDisambiguation(null);
-                setManualFormOrigin("disambiguation");
-                setCurrentScreen("manualForm");
+                setScreen({ name: "manualForm", origin: "disambiguation", initialData: medicineInfo });
               }}
             />
           )}
@@ -410,8 +415,8 @@ function AppContent() {
               loading={loading}
               searchMessage={searchMessage}
               onRetryStep={handleRetryStep}
-              onGoToCamera={() => setCurrentScreen("camera")}
-              onGoToManualForm={() => { setManualFormOrigin("search"); setCurrentScreen("manualForm"); }}
+              onGoToCamera={() => setScreen({ name: "camera" })}
+              onGoToManualForm={() => setScreen({ name: "manualForm", origin: "search" })}
               onReset={handleReset}
             />
           )}
