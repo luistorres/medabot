@@ -6,53 +6,54 @@
 @source "./utils";
 
 @theme {
-  --font-sans: "Outfit", system-ui, sans-serif;
+  --font-sans: "Figtree", system-ui, sans-serif;
+  --font-display: "Fraunces", Georgia, serif;
 
-  /* Primary - Deep Blue (trust, authority) */
-  --color-primary-50: #eef4ff;
-  --color-primary-100: #d9e5ff;
-  --color-primary-200: #bcd0ff;
-  --color-primary-300: #8eb3ff;
-  --color-primary-400: #5988ff;
-  --color-primary-500: #3366ff;
-  --color-primary-600: #1a4fff;
-  --color-primary-700: #1240e6;
-  --color-primary-800: #1536ba;
-  --color-primary-900: #173093;
+  /* Primary - Herbal Green (health, safety, calm) */
+  --color-primary-50: #eef6f1;
+  --color-primary-100: #d6ebe0;
+  --color-primary-200: #aed8c2;
+  --color-primary-300: #7cbf9d;
+  --color-primary-400: #54a37d;
+  --color-primary-500: #3f8f6e;
+  --color-primary-600: #2f7558;
+  --color-primary-700: #285f49;
+  --color-primary-800: #244d3d;
+  --color-primary-900: #1f4034;
 
-  /* Accent - Teal (modern health, clinical precision) */
-  --color-accent-50: #effefb;
-  --color-accent-100: #c8fef3;
-  --color-accent-200: #91fce8;
-  --color-accent-300: #52f2d8;
-  --color-accent-400: #20dec4;
-  --color-accent-500: #08c2ab;
-  --color-accent-600: #039c8d;
-  --color-accent-700: #087d72;
-  --color-accent-800: #0c635c;
-  --color-accent-900: #0f524c;
+  /* Accent - Soft Terracotta / Clay (human warmth) */
+  --color-accent-50: #fbf0e9;
+  --color-accent-100: #f6ddcd;
+  --color-accent-200: #eebfa1;
+  --color-accent-300: #e29c74;
+  --color-accent-400: #db8a5f;
+  --color-accent-500: #d4825b;
+  --color-accent-600: #bf6b45;
+  --color-accent-700: #9e5538;
+  --color-accent-800: #7f4530;
+  --color-accent-900: #693a2a;
 
   /* Semantic */
-  --color-success-50: #ecfdf5;
-  --color-success-500: #10b981;
-  --color-success-600: #059669;
-  --color-success-700: #047857;
+  --color-success-50: #edf7f2;
+  --color-success-500: #2d9e6b;
+  --color-success-600: #1e8557;
+  --color-success-700: #186847;
 
-  --color-warning-50: #fffbeb;
-  --color-warning-500: #f59e0b;
-  --color-warning-600: #d97706;
+  --color-warning-50: #fef8ec;
+  --color-warning-500: #e8a020;
+  --color-warning-600: #c98410;
 
-  --color-error-50: #fff1f2;
-  --color-error-100: #ffe4e6;
-  --color-error-200: #fecdd3;
-  --color-error-500: #f43f5e;
-  --color-error-600: #e11d48;
-  --color-error-700: #be123c;
+  --color-error-50: #fef2f0;
+  --color-error-100: #fde3de;
+  --color-error-200: #facbb3;
+  --color-error-500: #d9522c;
+  --color-error-600: #c04020;
+  --color-error-700: #9e3218;
 
-  /* Surface */
-  --color-surface: #ffffff;
-  --color-surface-secondary: #f8fafc;
-  --color-surface-tertiary: #f1f5f9;
+  /* Surface - warm paper */
+  --color-surface: #fffdf9;
+  --color-surface-secondary: #faf6ef;
+  --color-surface-tertiary: #f3ece1;
 
   /* Radii */
   --radius-lg: 0.75rem;
@@ -64,7 +65,6 @@
   --animate-pulse-highlight: pulse-highlight 1.5s ease-out;
   --animate-slide-up: slide-up 0.3s ease-out;
   --animate-fade-scale-in: fade-scale-in 0.2s ease-out;
-  --animate-float: float 6s ease-in-out infinite;
   --animate-stagger-in: stagger-in 0.5s ease-out both;
 }
 
@@ -83,7 +83,7 @@
     font-size: 16px;
     line-height: 1.6;
     letter-spacing: -0.01em;
-    color: #1e293b;
+    color: #2b2622;
   }
 
   #root {
@@ -113,7 +113,7 @@
     @apply bg-gray-300;
   }
 
-  /* Subtle noise texture overlay */
+  /* Warm paper grain — very subtle, intentional texture */
   .bg-noise {
     position: relative;
   }
@@ -121,33 +121,19 @@
     content: "";
     position: absolute;
     inset: 0;
-    opacity: 0.03;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity: 0.015;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
     pointer-events: none;
     z-index: 0;
   }
 
-  /* Glass effect */
-  .glass {
-    background: rgba(255, 255, 255, 0.7);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.5);
-  }
-
-  .glass-subtle {
-    background: rgba(255, 255, 255, 0.5);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-  }
-
-  /* Gradient mesh for landing */
+  /* Warm landing background — soft organic wash over warm paper */
   .bg-mesh-landing {
-    background-color: #f8fafc;
+    background-color: #fffdf9;
     background-image:
-      radial-gradient(at 20% 20%, rgba(26, 79, 255, 0.03) 0px, transparent 60%),
-      radial-gradient(at 80% 10%, rgba(8, 194, 171, 0.03) 0px, transparent 50%),
-      radial-gradient(at 50% 80%, rgba(26, 79, 255, 0.02) 0px, transparent 60%);
+      radial-gradient(at 15% 15%, rgba(63, 143, 110, 0.06) 0px, transparent 55%),
+      radial-gradient(at 85% 10%, rgba(212, 130, 91, 0.05) 0px, transparent 50%),
+      radial-gradient(at 50% 90%, rgba(63, 143, 110, 0.04) 0px, transparent 60%);
   }
 
   /* Stagger animation delays */
@@ -182,9 +168,9 @@
   }
 
   @keyframes pulse-highlight {
-    0% { box-shadow: 0 0 0 0 rgba(8, 194, 171, 0.5); }
-    50% { box-shadow: 0 0 0 8px rgba(8, 194, 171, 0.15); }
-    100% { box-shadow: 0 0 0 0 rgba(8, 194, 171, 0); }
+    0% { box-shadow: 0 0 0 0 rgba(63, 143, 110, 0.4); }
+    50% { box-shadow: 0 0 0 8px rgba(63, 143, 110, 0.1); }
+    100% { box-shadow: 0 0 0 0 rgba(63, 143, 110, 0); }
   }
 
   @keyframes slide-up {
@@ -195,11 +181,6 @@
   @keyframes fade-scale-in {
     from { opacity: 0; transform: scale(0.95); }
     to { opacity: 1; transform: scale(1); }
-  }
-
-  @keyframes float {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-8px); }
   }
 
   @keyframes stagger-in {

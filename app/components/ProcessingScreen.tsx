@@ -48,14 +48,11 @@ const ProcessingScreen = ({
 }: ProcessingScreenProps) => {
   return (
     <div className="min-h-screen bg-mesh-landing flex items-center justify-center p-6 relative overflow-hidden">
-      {/* Decorative floating orbs */}
-      <div className="absolute top-24 right-6 w-32 h-32 rounded-full bg-accent-400/10 blur-2xl animate-float" />
-      <div className="absolute bottom-32 left-8 w-40 h-40 rounded-full bg-primary-400/8 blur-3xl animate-float stagger-3" />
 
       <div className="max-w-lg w-full space-y-4 relative z-10">
         {/* Medicine Info Card - shows once identified */}
         {medicineInfo && (completedSteps.includes("identify") || medicineInfo.name) && medicineInfo.name && (
-          <div className="glass rounded-2xl ring-1 ring-gray-200/60 shadow-sm p-5 animate-stagger-in stagger-1">
+          <div className="bg-surface rounded-2xl ring-1 ring-surface-tertiary shadow-sm p-5 animate-stagger-in stagger-1">
             <div className="flex items-start gap-3.5">
               <div className="w-11 h-11 rounded-xl bg-primary-100/80 flex items-center justify-center flex-shrink-0">
                 <svg className="w-5 h-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
@@ -101,7 +98,7 @@ const ProcessingScreen = ({
 
         {/* Processing Steps */}
         {loading && (
-          <div className="glass rounded-2xl ring-1 ring-gray-200/60 shadow-sm p-5 animate-stagger-in stagger-2">
+          <div className="bg-surface rounded-2xl ring-1 ring-surface-tertiary shadow-sm p-5 animate-stagger-in stagger-2">
             <div className="space-y-3.5">
               {steps.map((step) => {
                 const isCompleted = completedSteps.includes(step.id);
@@ -140,7 +137,7 @@ const ProcessingScreen = ({
 
         {/* Error Display */}
         {processingError && (
-          <div className="glass rounded-2xl ring-1 ring-error-200/60 shadow-sm p-5 animate-fade-in">
+          <div className="bg-surface rounded-2xl ring-1 ring-error-200/60 shadow-sm p-5 animate-fade-in">
             <div className="flex items-start gap-3.5 mb-5">
               <div className="w-10 h-10 rounded-full bg-error-100 flex items-center justify-center flex-shrink-0">
                 <svg className="w-5 h-5 text-error-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>

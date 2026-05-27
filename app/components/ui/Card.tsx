@@ -16,7 +16,7 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
       <div
         ref={ref}
         className={`
-          bg-white rounded-2xl shadow-sm border border-gray-100
+          bg-surface rounded-2xl shadow-sm shadow-primary-900/6 border border-surface-tertiary
           ${paddingClasses[padding]}
           ${className}
         `}

@@ -17,7 +17,7 @@ const Chip = forwardRef<HTMLButtonElement, ChipProps>(
           ${
             active
               ? "bg-primary-100 text-primary-700 border border-primary-300"
-              : "bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200"
+              : "bg-surface-secondary hover:bg-surface-tertiary text-primary-800 border border-surface-tertiary"
           }
           active:scale-95
           ${className}

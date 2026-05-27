@@ -35,9 +35,6 @@ const SearchScreen = ({ onSubmit, onCancel, onAdvancedSearch }: SearchScreenProp
 
   return (
     <div className="min-h-screen bg-mesh-landing flex flex-col relative overflow-hidden">
-      {/* Decorative floating orbs */}
-      <div className="absolute top-20 left-6 w-36 h-36 rounded-full bg-primary-400/8 blur-3xl animate-float" />
-      <div className="absolute bottom-40 right-8 w-28 h-28 rounded-full bg-accent-400/10 blur-2xl animate-float stagger-3" />
 
       <div className="flex-1 flex flex-col px-7 pt-14 pb-10 relative z-10 md:items-center md:justify-center md:pt-0">
         {/* Back button */}
@@ -65,9 +62,9 @@ const SearchScreen = ({ onSubmit, onCancel, onAdvancedSearch }: SearchScreenProp
 
         {/* Search content */}
         <div className="w-full max-w-md md:max-w-lg animate-stagger-in stagger-3">
-          {/* Search input with glass effect */}
+          {/* Search input */}
           <div className="flex gap-2.5 mb-5">
-            <div className="flex-1 glass rounded-2xl ring-1 ring-gray-200/60 shadow-sm focus-within:ring-2 focus-within:ring-primary-500 focus-within:shadow-md transition-all">
+            <div className="flex-1 bg-surface rounded-2xl ring-1 ring-surface-tertiary shadow-sm focus-within:ring-2 focus-within:ring-primary-500 focus-within:shadow-md transition-all">
               <input
                 type="text"
                 value={query}
@@ -105,7 +102,7 @@ const SearchScreen = ({ onSubmit, onCancel, onAdvancedSearch }: SearchScreenProp
                 <button
                   key={hint}
                   onClick={() => setQuery(hint)}
-                  className="px-3.5 py-2 text-[13px] text-gray-500 glass rounded-xl ring-1 ring-gray-200/60 hover:bg-white/80 hover:text-gray-700 transition-all"
+                  className="px-3.5 py-2 text-[13px] text-primary-800 bg-surface rounded-xl ring-1 ring-surface-tertiary hover:bg-surface-secondary hover:text-primary-900 transition-all"
                 >
                   {hint}
                 </button>

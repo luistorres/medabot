@@ -20,7 +20,7 @@ export const Route = createRootRoute({
         content:
           "Identifique medicamentos por foto e obtenha respostas instantâneas com base nos folhetos informativos oficiais portugueses.",
       },
-      { name: "theme-color", content: "#4f46e5" },
+      { name: "theme-color", content: "#3f8f6e" },
       // Open Graph
       { property: "og:type", content: "website" },
       { property: "og:title", content: "MedaBot — Assistente Inteligente de Medicamentos" },
@@ -51,7 +51,10 @@ export const Route = createRootRoute({
       // Fonts
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Figtree:wght@400;500;600;700&display=swap",
+      },
       { rel: "stylesheet", href: styles },
     ],
   }),
