@@ -12,6 +12,7 @@ interface ChatMessage {
   content: string;
   timestamp: Date;
   sourcePages?: number[];
+  isOverview?: boolean;
 }
 
 interface ChatProps {
@@ -31,6 +32,20 @@ const TypingDots = () => (
     ))}
   </div>
 );
+
+/**
+ * Detects if the assistant's answer is a "not found in leaflet" response.
+ * The backend prompt instructs the model to reply with this phrasing when
+ * the information is not in the leaflet.
+ */
+function isNotFoundAnswer(content: string): boolean {
+  const lower = content.toLowerCase();
+  return (
+    lower.includes("não encontro essa informação no folheto") ||
+    lower.includes("não encontrei essa informação no folheto") ||
+    lower.includes("não consta no folheto")
+  );
+}
 
 const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -56,6 +71,7 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
           type: "assistant",
           content: initialOverview,
           timestamp: new Date(),
+          isOverview: true,
         },
       ]);
     }
@@ -140,6 +156,32 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
       return <div className="text-sm leading-relaxed">{message.content}</div>;
     }
 
+    const notFound = isNotFoundAnswer(message.content);
+
+    // "Not found" answers get a distinct muted note style
+    if (notFound) {
+      return (
+        <div className="flex items-start gap-2">
+          <svg
+            className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            strokeWidth={1.5}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
+            />
+          </svg>
+          <p className="text-sm leading-relaxed text-gray-500 italic">
+            {message.content}
+          </p>
+        </div>
+      );
+    }
+
     // Format with markdown, then parse for page references
     const formatted = formatMessage(message.content);
     return (
@@ -163,10 +205,11 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
 
   return (
     <div className="bg-white flex flex-col h-full">
-      {/* Disclaimer banner */}
-      <div className="px-4 py-2 bg-primary-50 border-b border-primary-100 flex-shrink-0">
-        <p className="text-xs text-primary-700 text-center">
-          Respostas baseadas no folheto informativo oficial de {medicineName}.
+      {/* Provenance banner */}
+      <div className="px-4 py-2.5 bg-primary-50 border-b border-primary-100 flex-shrink-0">
+        <p className="text-xs text-primary-700 text-center font-medium">
+          Fonte: folheto informativo oficial (INFARMED) —{" "}
+          <span className="font-semibold">{medicineName}</span>
         </p>
       </div>
 
@@ -180,6 +223,8 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
             const prevMessage = index > 0 ? messages[index - 1] : null;
             const sameSender = prevMessage?.type === message.type;
             const spacing = sameSender ? "mt-1" : "mt-4";
+            const notFound =
+              message.type === "assistant" && isNotFoundAnswer(message.content);
 
             return (
               <div
@@ -190,16 +235,36 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
                   className={`max-w-[85%] md:max-w-[75%] ${
                     message.type === "user"
                       ? "bg-primary-600 text-white rounded-2xl rounded-br-md px-4 py-2.5 shadow-sm"
-                      : "bg-gray-100 text-gray-800 rounded-2xl rounded-bl-md px-4 py-2.5"
+                      : notFound
+                        ? "bg-gray-50 text-gray-500 rounded-2xl rounded-bl-md px-4 py-2.5 border border-dashed border-gray-200"
+                        : "bg-gray-100 text-gray-800 rounded-2xl rounded-bl-md px-4 py-2.5"
                   }`}
                 >
                   {renderMessageContent(message)}
 
                   {/* Source attribution for assistant messages */}
-                  {message.type === "assistant" && message.sourcePages && message.sourcePages.length > 0 && (
-                    <p className="text-xs text-gray-400 mt-2 pt-1.5 border-t border-gray-200">
-                      Fonte: Folheto informativo, p. {message.sourcePages.join(", ")}
-                    </p>
+                  {message.type === "assistant" && !notFound && (
+                    <div className="mt-2 pt-1.5 border-t border-gray-200">
+                      {message.sourcePages && message.sourcePages.length > 0 ? (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-xs text-gray-400">Folheto, p.</span>
+                          {message.sourcePages.map((page) => (
+                            <button
+                              key={page}
+                              onClick={() => handlePageReferenceClick(page)}
+                              className="inline-flex items-center px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 text-xs font-medium ring-1 ring-primary-200 hover:bg-primary-100 transition-colors"
+                              aria-label={`Ir para página ${page} do folheto`}
+                            >
+                              {page}
+                            </button>
+                          ))}
+                        </div>
+                      ) : message.isOverview ? (
+                        <p className="text-xs text-gray-400">
+                          Com base no folheto informativo oficial
+                        </p>
+                      ) : null}
+                    </div>
                   )}
 
                   <p
@@ -301,7 +366,7 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
       </div>
 
       {/* Input */}
-      <div className="px-4 pb-4 pt-2 flex-shrink-0">
+      <div className="px-4 pb-2 pt-2 flex-shrink-0">
         <div className="max-w-2xl mx-auto flex gap-2">
           <input
             type="text"
@@ -327,6 +392,15 @@ const Chat = ({ pdfData, medicineName, initialOverview }: ChatProps) => {
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
             </svg>
           </button>
+        </div>
+      </div>
+
+      {/* Persistent medical disclaimer */}
+      <div className="px-4 pb-4 flex-shrink-0">
+        <div className="max-w-2xl mx-auto">
+          <p className="text-[11px] text-gray-400 text-center leading-snug">
+            O MedaBot ajuda a perceber o folheto. Não substitui o aconselhamento do seu médico ou farmacêutico.
+          </p>
         </div>
       </div>
     </div>

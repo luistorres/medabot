@@ -208,6 +208,16 @@ const MedicineInfoPanel = ({
             </Button>
           )}
         </div>
+
+        {/* Provenance + medical disclaimer */}
+        <div className="px-4 pb-4 pt-1 border-t border-gray-100 space-y-1">
+          <p className="text-[11px] text-gray-400 text-center leading-snug">
+            Fonte: folheto informativo oficial (INFARMED)
+          </p>
+          <p className="text-[11px] text-gray-400 text-center leading-snug">
+            O MedaBot ajuda a perceber o folheto. Não substitui o aconselhamento do seu médico ou farmacêutico.
+          </p>
+        </div>
       </div>
     </div>
   );
