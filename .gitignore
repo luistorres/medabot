@@ -15,3 +15,7 @@ debug-rcm.pdf
 *.db-shm
 *.db-wal
 *.xlsx
+
+# Flow / superpowers scaffolding — kept locally, never committed
+.superpowers/
+docs/superpowers/
