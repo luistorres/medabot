@@ -6,66 +6,54 @@
 @source "./utils";
 
 @theme {
-  --font-sans: "Outfit", system-ui, sans-serif;
+  /* Fonts */
+  --font-serif: "Newsreader", "Source Serif 4", Georgia, serif;
+  --font-sans:  "Geist", -apple-system, system-ui, sans-serif;
+  --font-mono:  "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
 
-  /* Primary - Deep Blue (trust, authority) */
-  --color-primary-50: #eef4ff;
-  --color-primary-100: #d9e5ff;
-  --color-primary-200: #bcd0ff;
-  --color-primary-300: #8eb3ff;
-  --color-primary-400: #5988ff;
-  --color-primary-500: #3366ff;
-  --color-primary-600: #1a4fff;
-  --color-primary-700: #1240e6;
-  --color-primary-800: #1536ba;
-  --color-primary-900: #173093;
+  /* Surfaces — warm neutrals */
+  --color-bg:      #F4EFE6;
+  --color-surface: #FAF6EE;
+  --color-paper:   #FFFFFF;
+  --color-tint:    #EDE5D3;
 
-  /* Accent - Teal (modern health, clinical precision) */
-  --color-accent-50: #effefb;
-  --color-accent-100: #c8fef3;
-  --color-accent-200: #91fce8;
-  --color-accent-300: #52f2d8;
-  --color-accent-400: #20dec4;
-  --color-accent-500: #08c2ab;
-  --color-accent-600: #039c8d;
-  --color-accent-700: #087d72;
-  --color-accent-800: #0c635c;
-  --color-accent-900: #0f524c;
+  /* Ink — warm grayscale */
+  --color-ink:     #1A1815;
+  --color-ink-2:   #4A453E;
+  --color-muted:   #847A6E;
+  --color-faint:   #B5AC9F;
+  --color-border:  #E5DCC9;
+  --color-rule:    #EFE8D8;
 
-  /* Semantic */
-  --color-success-50: #ecfdf5;
-  --color-success-500: #10b981;
-  --color-success-600: #059669;
-  --color-success-700: #047857;
+  /* Brand — deep ink-navy */
+  --color-brand:      #1F2D40;
+  --color-brand-deep: #0F1A2A;
+  --color-brand-soft: #E8EBF1;
+  --color-brand-ink:  #0F1A2A;
 
-  --color-warning-50: #fffbeb;
-  --color-warning-500: #f59e0b;
-  --color-warning-600: #d97706;
+  /* Accent — warm amber */
+  --color-accent:      #B07A1F;
+  --color-accent-soft: #F2E8D2;
+  --color-accent-ink:  #5C3D0F;
 
-  --color-error-50: #fff1f2;
-  --color-error-100: #ffe4e6;
-  --color-error-200: #fecdd3;
-  --color-error-500: #f43f5e;
-  --color-error-600: #e11d48;
-  --color-error-700: #be123c;
+  /* States */
+  --color-mustard:      #B47718;
+  --color-mustard-soft: #F4E5C8;
+  --color-error:        #A6332A;
+  --color-error-soft:   #F4DCD8;
 
-  /* Surface */
-  --color-surface: #ffffff;
-  --color-surface-secondary: #f8fafc;
-  --color-surface-tertiary: #f1f5f9;
+  /* Radii — design's 4/8/12 scale. Only the standard Tailwind v4 radius keys. */
+  --radius-sm: 4px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
 
-  /* Radii */
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
-  --radius-2xl: 1.25rem;
+  /* Shadows — flat, warm-tinted neutral only */
+  --shadow-1: 0 1px 0 rgba(26,24,21,0.04), 0 1px 2px rgba(26,24,21,0.05);
+  --shadow-2: 0 4px 12px rgba(26,24,21,0.06), 0 1px 3px rgba(26,24,21,0.04);
 
   /* Animations */
-  --animate-typing-dots: typing-dots 1.4s infinite ease-in-out;
-  --animate-pulse-highlight: pulse-highlight 1.5s ease-out;
-  --animate-slide-up: slide-up 0.3s ease-out;
-  --animate-fade-scale-in: fade-scale-in 0.2s ease-out;
-  --animate-float: float 6s ease-in-out infinite;
-  --animate-stagger-in: stagger-in 0.5s ease-out both;
+  --animate-pulse-dot: pulse-dot 1.4s ease-in-out infinite;
+  --animate-amber-wash: amber-wash 2s ease-out;
 }
 
 /* Global styles */
@@ -80,10 +68,11 @@
 
   body {
     @apply h-full m-0 p-0 font-sans antialiased;
-    font-size: 16px;
-    line-height: 1.6;
-    letter-spacing: -0.01em;
-    color: #1e293b;
+    font-size: 15px;
+    line-height: 1.55;
+    letter-spacing: -0.005em;
+    color: var(--color-ink);
+    background-color: var(--color-bg);
   }
 
   #root {
@@ -106,104 +95,37 @@
   }
 
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    @apply bg-gray-200 rounded-full;
+    background-color: var(--color-faint);
+    @apply rounded-full;
   }
 
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    @apply bg-gray-300;
+    background-color: var(--color-muted);
   }
 
-  /* Subtle noise texture overlay */
-  .bg-noise {
-    position: relative;
-  }
-  .bg-noise::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    opacity: 0.03;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-    pointer-events: none;
-    z-index: 0;
+  @keyframes pulse-dot { 0%,100% { opacity:0.4 } 50% { opacity:1 } }
+  @keyframes amber-wash { 0% { background-color: var(--color-accent-soft) } 100% { background-color: transparent } }
+  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+  .animate-amber-wash { animation: var(--animate-amber-wash); }
+  .animate-pulse-dot  { animation: var(--animate-pulse-dot); }
+  .animate-fade-in    { animation: fade-in 0.15s ease-out both; }
+  @media (prefers-reduced-motion: reduce) {
+    .animate-amber-wash, .animate-pulse-dot, .animate-fade-in { animation: none; }
   }
 
-  /* Glass effect */
-  .glass {
-    background: rgba(255, 255, 255, 0.7);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.5);
+  .mb-wordmark {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.34em;
   }
-
-  .glass-subtle {
-    background: rgba(255, 255, 255, 0.5);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-  }
-
-  /* Gradient mesh for landing */
-  .bg-mesh-landing {
-    background-color: #f8fafc;
-    background-image:
-      radial-gradient(at 20% 20%, rgba(26, 79, 255, 0.03) 0px, transparent 60%),
-      radial-gradient(at 80% 10%, rgba(8, 194, 171, 0.03) 0px, transparent 50%),
-      radial-gradient(at 50% 80%, rgba(26, 79, 255, 0.02) 0px, transparent 60%);
-  }
-
-  /* Stagger animation delays */
-  .stagger-1 { animation-delay: 0.05s; }
-  .stagger-2 { animation-delay: 0.1s; }
-  .stagger-3 { animation-delay: 0.15s; }
-  .stagger-4 { animation-delay: 0.2s; }
-  .stagger-5 { animation-delay: 0.25s; }
-
-  /* Keyframes */
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(0.5rem); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-
-  .animate-fade-in {
-    animation: fadeIn 0.3s ease-out;
-  }
-
-  @keyframes slideInRight {
-    from { transform: translateX(100%); }
-    to { transform: translateX(0); }
-  }
-
-  .animate-slide-in-right {
-    animation: slideInRight 0.3s ease-out;
-  }
-
-  @keyframes typing-dots {
-    0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
-    40% { transform: scale(1); opacity: 1; }
-  }
-
-  @keyframes pulse-highlight {
-    0% { box-shadow: 0 0 0 0 rgba(8, 194, 171, 0.5); }
-    50% { box-shadow: 0 0 0 8px rgba(8, 194, 171, 0.15); }
-    100% { box-shadow: 0 0 0 0 rgba(8, 194, 171, 0); }
-  }
-
-  @keyframes slide-up {
-    from { opacity: 0; transform: translateY(1rem); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-
-  @keyframes fade-scale-in {
-    from { opacity: 0; transform: scale(0.95); }
-    to { opacity: 1; transform: scale(1); }
-  }
-
-  @keyframes float {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-8px); }
-  }
-
-  @keyframes stagger-in {
-    from { opacity: 0; transform: translateY(12px); }
-    to { opacity: 1; transform: translateY(0); }
+  .mb-wordmark .mark {
+    width: 0.27em; height: 0.27em;
+    border-radius: 9999px;
+    background: var(--color-brand);
+    display: inline-block;
   }
 }

@@ -1,7 +1,12 @@
 import { IdentifyMedicineResponse } from "../core/identify";
 import { usePDF } from "../context/PDFContext";
 import type { MedicineSummary } from "../server/extractMedicineSummary";
+import { isNotFoundAnswer } from "../utils/isNotFoundAnswer";
 import Button from "./ui/Button";
+import { Wordmark } from "./ui/Wordmark";
+import { Icon } from "./ui/Icon";
+import { SourceBadge } from "./ui/SourceBadge";
+import { MetaRow } from "./ui/MetaRow";
 
 interface MedicineInfoPanelProps {
   medicineInfo: IdentifyMedicineResponse;
@@ -11,6 +16,38 @@ interface MedicineInfoPanelProps {
   onReset: () => void;
   onDownloadPdf: () => void;
   onForceRefresh: () => void;
+  overview?: string;
+}
+
+const IMPORTANTE_KEYWORDS = [
+  "dose",
+  "máxim",
+  "maxim",
+  "álcool",
+  "alcool",
+  "interaç",
+  "interac",
+];
+
+function extractImportanteSentences(text: string): string {
+  // Split on ". " or newlines to get sentences
+  const raw = text.split(/\.\s+|\n+/);
+  const lower = text.toLowerCase();
+  // Quick guard — if none of the keywords appear anywhere, skip the expensive loop
+  const hasAny = IMPORTANTE_KEYWORDS.some((kw) => lower.includes(kw));
+  if (!hasAny) return "";
+
+  const matched: string[] = [];
+  for (const sentence of raw) {
+    const s = sentence.trim();
+    if (!s) continue;
+    const sl = s.toLowerCase();
+    if (IMPORTANTE_KEYWORDS.some((kw) => sl.includes(kw))) {
+      matched.push(s);
+      if (matched.length >= 2) break;
+    }
+  }
+  return matched.join(". ");
 }
 
 const MedicineInfoPanel = ({
@@ -21,6 +58,7 @@ const MedicineInfoPanel = ({
   onReset,
   onDownloadPdf,
   onForceRefresh,
+  overview,
 }: MedicineInfoPanelProps) => {
   const { setIsPdfViewerOpen, setActiveTab } = usePDF();
 
@@ -29,174 +67,186 @@ const MedicineInfoPanel = ({
     setActiveTab("pdf");
   };
 
-  const showBrandChip = medicineInfo.brand
-    && medicineInfo.brand !== medicineInfo.name
-    && medicineInfo.brand.toLowerCase() !== medicineInfo.name.toLowerCase();
+  // Mono subtitle — dosage · pharmaceuticalForm (omit blanks)
+  const monoSubtitle = [medicineInfo.dosage, medicineInfo.pharmaceuticalForm]
+    .filter(Boolean)
+    .join(" · ");
+
+  // MetaRow items — omit items with empty/undefined values
+  const metaItems = [
+    { label: "SUBSTÂNCIA", value: medicineInfo.activeSubstance, serif: true as const },
+    { label: "FORMA", value: medicineInfo.pharmaceuticalForm },
+    { label: "TITULAR", value: medicineInfo.titular },
+  ].filter((item): item is { label: string; value: string; serif?: true } =>
+    Boolean(item.value)
+  );
+
+  // Importante saber callout — only when overview present, not a "not found" answer,
+  // and at least one sentence matches a safety keyword
+  const importanteText =
+    overview && !isNotFoundAnswer(overview)
+      ? extractImportanteSentences(overview)
+      : "";
+  const showImportante = importanteText.length > 0;
 
   return (
-    <div className="bg-white h-full flex flex-col">
-      {/* Scrollable content area */}
+    <div className="bg-bg h-full flex flex-col">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-rule flex-shrink-0">
+        <button
+          onClick={onReset}
+          className="inline-flex items-center justify-center w-9 h-9 rounded-lg text-ink-2 hover:bg-tint transition-colors"
+          aria-label="Voltar"
+        >
+          <Icon.back className="w-5 h-5" />
+        </button>
+        <Wordmark size={16} />
+        <SourceBadge medicine={medicineInfo.name} />
+      </div>
+
+      {/* Scrollable content */}
       <div className="flex-1 min-h-0 overflow-y-auto">
-        {/* Hero section — medicine identity */}
-        <div className="p-5 pb-4">
-          {/* Image + name group */}
-          <div className="flex items-start gap-3.5 mb-3">
-            {image && (
+        {/* Hero block */}
+        <div className="p-6 pb-5">
+          {summary?.category && (
+            <p className="text-[11px] uppercase tracking-widest text-brand font-medium mb-2">
+              {summary.category}
+            </p>
+          )}
+          <h1
+            className="font-serif text-[34px] leading-[1.05] tracking-[-0.02em] text-ink font-normal mb-1"
+          >
+            {medicineInfo.name}
+          </h1>
+          {monoSubtitle && (
+            <p className="font-mono text-[15px] tracking-[-0.01em] text-muted">
+              {monoSubtitle}
+            </p>
+          )}
+        </div>
+
+        {/* Identity card */}
+        <div className="px-6 pb-6">
+          <div className="bg-paper rounded-xl border border-border p-4 flex gap-4 items-start">
+            {/* Box silhouette — photo or CSS placeholder */}
+            {image ? (
               <img
                 src={image}
                 alt="Medicamento capturado"
-                className="w-14 h-14 object-cover rounded-xl shadow-sm ring-1 ring-gray-100 flex-shrink-0"
+                className="rounded-[6px] ring-1 ring-border object-cover flex-shrink-0"
+                style={{ width: 74, height: 92 }}
               />
-            )}
-            <div className="flex-1 min-w-0">
-              <h2 className="text-lg font-700 text-gray-900 tracking-tight leading-tight">
-                {medicineInfo.name}
-              </h2>
-              {showBrandChip && (
-                <p className="text-[13px] text-gray-400 font-light mt-0.5">
-                  {medicineInfo.brand}
+            ) : (
+              <div
+                className="rounded-[6px] bg-gradient-to-b from-[#FBFBFB] to-[#F0EDE6] border border-border flex flex-col justify-between p-2 flex-shrink-0"
+                style={{ width: 74, height: 92 }}
+              >
+                <div>
+                  <div className="bg-brand mb-1" style={{ width: 28, height: 3 }} />
+                  <p className="font-serif text-[10px] text-ink leading-tight">
+                    {medicineInfo.name}
+                  </p>
+                  {medicineInfo.dosage && (
+                    <p className="font-mono text-[7px] text-ink-2 mt-0.5">
+                      {medicineInfo.dosage}
+                    </p>
+                  )}
+                </div>
+                <p className="text-[6px] uppercase tracking-[0.05em] text-muted">
+                  20 COMP.
                 </p>
+              </div>
+            )}
+
+            {/* Meta key-value rows */}
+            <div className="flex-1 min-w-0">
+              {metaItems.length > 0 ? (
+                <MetaRow items={metaItems} />
+              ) : (
+                <p className="text-[13px] text-muted">—</p>
               )}
             </div>
           </div>
-
-          {/* Category badge */}
-          {summary?.category && (
-            <div className="mb-3">
-              <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-primary-600 text-white text-[11px] font-semibold uppercase tracking-wide">
-                {summary.category}
-              </span>
-            </div>
-          )}
-
-          {/* Key details as compact chips */}
-          <div className="flex flex-wrap gap-2">
-            {medicineInfo.activeSubstance && (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-primary-50 text-primary-700 text-xs font-medium ring-1 ring-primary-100">
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 0 1-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 0 1 4.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0 1 12 15a9.065 9.065 0 0 0-6.23.693L5 14.5m14.8.8 1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0 1 12 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5" />
-                </svg>
-                {medicineInfo.activeSubstance}
-              </span>
-            )}
-            {medicineInfo.dosage && (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-accent-50 text-accent-700 text-xs font-medium ring-1 ring-accent-100">
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v17.25m0 0c-1.472 0-2.882.265-4.185.75M12 20.25c1.472 0 2.882.265 4.185.75M18.75 4.97A48.416 48.416 0 0 0 12 4.5c-2.291 0-4.545.16-6.75.47m13.5 0c1.01.143 2.01.317 3 .52m-3-.52 2.62 10.726c.122.499-.106 1.028-.589 1.202a5.988 5.988 0 0 1-2.031.352 5.988 5.988 0 0 1-2.031-.352c-.483-.174-.711-.703-.59-1.202L18.75 4.971zm-16.5.52c.99-.203 1.99-.377 3-.52m0 0 2.62 10.726c.122.499-.106 1.028-.589 1.202a5.989 5.989 0 0 1-2.031.352 5.989 5.989 0 0 1-2.031-.352c-.483-.174-.711-.703-.59-1.202L5.25 4.971z" />
-                </svg>
-                {medicineInfo.dosage}
-              </span>
-            )}
-            {medicineInfo.pharmaceuticalForm && (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-50 text-gray-600 text-xs font-medium ring-1 ring-gray-200">
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 0 1-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 0 1 4.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0 1 12 15a9.065 9.065 0 0 0-6.23.693L5 14.5m14.8.8 1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0 1 12 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5" />
-                </svg>
-                {medicineInfo.pharmaceuticalForm}
-              </span>
-            )}
-            {medicineInfo.titular && (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-50 text-gray-600 text-xs font-medium ring-1 ring-gray-200">
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3H21m-3.75 3H21" />
-                </svg>
-                {medicineInfo.titular}
-              </span>
-            )}
-            {showBrandChip && (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-50 text-gray-600 text-xs font-medium ring-1 ring-gray-200">
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6Z" />
-                </svg>
-                {medicineInfo.brand}
-              </span>
-            )}
-          </div>
         </div>
 
-        {/* Indications — plain bullet points */}
+        {/* Para que serve */}
         {summary && summary.indications.length > 0 && (
-          <>
-            <div className="mx-5 border-t border-gray-100" />
-            <div className="p-5 pb-4">
-              <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-2.5">
-                Indicações terapêuticas
+          <div className="px-6 pb-6">
+            <p className="text-[11px] uppercase tracking-widest text-brand font-medium mb-3">
+              Para que serve
+            </p>
+            <ul className="flex flex-col gap-2">
+              {summary.indications.map((indication, i) => (
+                <li key={i} className="flex gap-3 items-baseline text-[14px] text-ink leading-snug">
+                  <span className="font-mono text-[11px] text-muted flex-shrink-0 min-w-[18px]">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <span>{indication}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Importante saber callout */}
+        {showImportante && (
+          <div className="px-6 pb-6">
+            <div className="bg-accent-soft border-l-2 border-accent rounded-r-lg p-4">
+              <p className="text-[11px] uppercase tracking-widest text-accent-ink font-medium mb-2">
+                Importante saber
               </p>
-              <ul className="space-y-1.5">
-                {summary.indications.map((indication, i) => (
-                  <li key={i} className="flex items-start gap-2 text-[13px] text-gray-700 leading-snug">
-                    <span className="w-1 h-1 rounded-full bg-primary-400 mt-[7px] flex-shrink-0" />
-                    {indication}
-                  </li>
-                ))}
-              </ul>
+              <p className="text-[13.5px] leading-[1.5] text-accent-ink">
+                {importanteText}.{" "}
+                <Button
+                  variant="link"
+                  onClick={handleViewPdf}
+                  className="text-[13.5px] text-accent-ink underline decoration-accent-ink/40 hover:decoration-accent-ink"
+                >
+                  Ver mais no folheto →
+                </Button>
+              </p>
             </div>
-          </>
+          </div>
         )}
       </div>
 
-      {/* Pinned actions — always visible at bottom */}
-      <div className="flex-shrink-0 border-t border-gray-100">
-        <div className="p-4">
-          {pdfData && (
-            <div className="space-y-2.5">
-              {/* Primary — open the leaflet */}
-              <Button variant="primary" fullWidth onClick={handleViewPdf}>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9z" />
-                </svg>
-                Ver folheto informativo
-              </Button>
-
-              {/* Secondary — utilities for this leaflet, a matched pair */}
-              <div className="grid grid-cols-2 gap-2.5">
-                <Button variant="secondary" fullWidth onClick={onDownloadPdf}>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                  </svg>
-                  Transferir
-                </Button>
-                <Button variant="secondary" fullWidth onClick={onForceRefresh}>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182" />
-                  </svg>
-                  Atualizar
-                </Button>
-              </div>
-
-              {/* Tertiary — start over, de-emphasized and set apart */}
+      {/* Pinned action stack */}
+      <div className="flex-shrink-0 border-t border-rule bg-bg px-4 pt-3.5 pb-4">
+        {pdfData ? (
+          <>
+            <Button variant="primary" fullWidth onClick={handleViewPdf}>
+              <Icon.doc className="w-4 h-4" />
+              Abrir folheto
+            </Button>
+            <div className="flex items-center justify-center gap-4 mt-3">
               <button
-                onClick={onReset}
-                className="w-full min-h-[44px] mt-0.5 inline-flex items-center justify-center gap-1.5 rounded-xl text-[13px] font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors"
+                onClick={onDownloadPdf}
+                className="inline-flex items-center gap-1.5 text-[12px] text-ink-2 hover:text-ink transition-colors"
               >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-                </svg>
-                Nova pesquisa
+                <Icon.download className="w-3.5 h-3.5" />
+                Guardar PDF
+              </button>
+              <span className="text-faint select-none">·</span>
+              <button
+                onClick={onForceRefresh}
+                className="inline-flex items-center gap-1.5 text-[12px] text-ink-2 hover:text-ink transition-colors"
+              >
+                <Icon.refresh className="w-3.5 h-3.5" />
+                Procurar novamente
               </button>
             </div>
-          )}
+          </>
+        ) : (
+          <Button variant="secondary" fullWidth onClick={onReset}>
+            <Icon.back className="w-4 h-4" />
+            Voltar ao início
+          </Button>
+        )}
 
-          {!pdfData && (
-            <Button variant="secondary" fullWidth onClick={onReset}>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-              </svg>
-              Nova pesquisa
-            </Button>
-          )}
-        </div>
-
-        {/* Provenance + medical disclaimer */}
-        <div className="px-4 pb-4 pt-1 border-t border-gray-100 space-y-1">
-          <p className="text-[11px] text-gray-400 text-center leading-snug">
-            Fonte: folheto informativo oficial (INFARMED)
-          </p>
-          <p className="text-[11px] text-gray-400 text-center leading-snug">
-            O MedaBot ajuda a perceber o folheto. Não substitui o aconselhamento do seu médico ou farmacêutico.
-          </p>
-        </div>
+        {/* Disclaimer */}
+        <p className="text-[11px] text-muted text-center leading-snug mt-3">
+          O Medabot ajuda a perceber o folheto. Não substitui o aconselhamento do seu médico ou farmacêutico.
+        </p>
       </div>
     </div>
   );

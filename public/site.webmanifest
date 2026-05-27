@@ -4,8 +4,8 @@
   "description": "Assistente inteligente de medicamentos. Identifica medicamentos por foto e responde a perguntas com base nos folhetos informativos oficiais.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#4f46e5",
+  "background_color": "#F4EFE6",
+  "theme_color": "#1F2D40",
   "icons": [
     {
       "src": "/icon-192.png",

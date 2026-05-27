@@ -19,7 +19,7 @@ export const suggestFollowUps = createServerFn({
         messages: [
           {
             role: "system",
-            content: `Generate 2-3 short follow-up questions in Portuguese that a patient might ask after reading the given answer about ${data.medicineName}. Return JSON array of strings only. Questions should be specific and different from common generic questions.`,
+            content: `Generate 2-3 short follow-up questions in Portuguese that a patient might ask after reading the given answer about ${data.medicineName}. Return a JSON object of the form {"questions": ["...", "...", "..."]} with the questions as an array of strings. Questions should be specific and different from common generic questions.`,
           },
           { role: "user", content: data.lastAnswer },
         ],
