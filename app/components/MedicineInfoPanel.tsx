@@ -148,7 +148,7 @@ const MedicineInfoPanel = ({
                 Ver folheto informativo
               </Button>
 
-              {/* Action tray — icon buttons with labels */}
+              {/* Utility actions — download and refresh only */}
               <div className="flex items-start justify-center gap-5">
                 <button
                   onClick={onDownloadPdf}
@@ -177,21 +177,15 @@ const MedicineInfoPanel = ({
                     Atualizar
                   </span>
                 </button>
-
-                <button
-                  onClick={onReset}
-                  className="group flex flex-col items-center gap-1.5"
-                >
-                  <span className="flex items-center justify-center w-10 h-10 rounded-full bg-gray-50 ring-1 ring-gray-200 text-gray-500 transition-all duration-150 group-hover:bg-gray-100 group-hover:ring-gray-300 group-hover:text-gray-700 group-active:scale-95">
-                    <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-                    </svg>
-                  </span>
-                  <span className="text-[11px] font-medium text-gray-400 group-hover:text-gray-700 transition-colors">
-                    Nova pesquisa
-                  </span>
-                </button>
               </div>
+
+              {/* Single, consistent "Nova pesquisa" action */}
+              <Button variant="ghost" fullWidth onClick={onReset}>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+                </svg>
+                Nova pesquisa
+              </Button>
             </div>
           )}
 

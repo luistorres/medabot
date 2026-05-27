@@ -17,6 +17,7 @@ interface PDFContextType {
   setIsPdfViewerOpen: (open: boolean) => void;
   setActiveTab: (tab: TabType) => void;
   setCameFromChat: (value: boolean) => void;
+  setLastJumpedPage: (page: number | null) => void;
 }
 
 const PDFContext = createContext<PDFContextType | undefined>(undefined);
@@ -58,6 +59,7 @@ export const PDFProvider = ({ children }: { children: ReactNode }) => {
         setIsPdfViewerOpen,
         setActiveTab,
         setCameFromChat,
+        setLastJumpedPage,
       }}
     >
       {children}
