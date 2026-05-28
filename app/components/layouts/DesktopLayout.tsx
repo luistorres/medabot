@@ -10,6 +10,7 @@ interface DesktopLayoutProps {
   chat: ReactNode;
   showPdfViewer?: boolean;
   onReset?: () => void;
+  medicineName?: string;
 }
 
 const DesktopLayout = ({
@@ -17,6 +18,7 @@ const DesktopLayout = ({
   chat,
   showPdfViewer = true,
   onReset,
+  medicineName,
 }: DesktopLayoutProps) => {
   const { isPdfViewerOpen } = usePDF();
   const [pdfWidth, setPdfWidth] = useState(60);
@@ -69,11 +71,11 @@ const DesktopLayout = ({
         <div className="flex items-center gap-6">
           <Wordmark size={18} />
           <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted px-2 py-0.5 border border-rule rounded-sm">
-            PT · BETA
+            Beta
           </span>
         </div>
         <div className="flex items-center gap-4">
-          <SourceBadge />
+          <SourceBadge medicine={medicineName} />
           {onReset && (
             <Button variant="link" size="sm" onClick={onReset}>
               Nova pesquisa

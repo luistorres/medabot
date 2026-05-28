@@ -78,7 +78,7 @@ const ManualMedicineForm = ({
   };
 
   return (
-    <div className="min-h-screen bg-bg flex flex-col">
+    <div className="min-h-screen bg-bg flex flex-col lg:max-w-2xl lg:mx-auto lg:border-x lg:border-rule">
       {/* Mobile header */}
       <div className="flex items-center justify-between px-6 py-3.5 border-b border-rule">
         <button

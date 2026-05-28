@@ -264,10 +264,12 @@ const Chat = ({
 
   return (
     <div className="bg-bg flex flex-col h-full">
-      {/* Header — two rows */}
-      <header className="flex-shrink-0 border-b border-rule bg-bg px-4 pt-3.5 pb-3">
-        {/* Row 1 — hidden on desktop */}
-        {!isDesktop && (
+      {/* Header — mobile only. On desktop the top bar + left medicine panel
+          own the wordmark, medicine name, and source badge, so the chat column
+          is just the conversation. */}
+      {!isDesktop && (
+        <header className="flex-shrink-0 border-b border-rule bg-bg px-4 pt-3.5 pb-3">
+          {/* Row 1 */}
           <div className="flex items-center justify-between mb-1.5">
             {onBack ? (
               <button
@@ -288,23 +290,23 @@ const Chat = ({
               Refazer
             </button>
           </div>
-        )}
 
-        {/* Row 2 — always shown */}
-        <div className="flex items-baseline justify-between gap-3">
-          <h1 className="min-w-0 truncate">
-            <span className="font-serif text-[22px] text-ink tracking-[-0.005em]">
-              {medicineName}
-            </span>
-            {dosage && (
-              <span className="ml-2 font-mono text-[13px] text-muted">
-                {dosage}
+          {/* Row 2 — always shown */}
+          <div className="flex items-baseline justify-between gap-3">
+            <h1 className="min-w-0 truncate">
+              <span className="font-serif text-[22px] text-ink tracking-[-0.005em]">
+                {medicineName}
               </span>
-            )}
-          </h1>
-          <SourceBadge medicine={medicineName} />
-        </div>
-      </header>
+              {dosage && (
+                <span className="ml-2 font-mono text-[13px] text-muted">
+                  {dosage}
+                </span>
+              )}
+            </h1>
+            <SourceBadge medicine={medicineName} />
+          </div>
+        </header>
+      )}
 
       {/* Conversation */}
       <div
