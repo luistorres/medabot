@@ -30,6 +30,8 @@ interface ChatMessage {
 
 interface ChatProps {
   pdfData: string;
+  /** Cache key for the already-parsed leaflet; lets chat turns skip re-uploading the PDF. */
+  docId?: string;
   medicineName: string;
   initialOverview?: string;
   onBack?: () => void;
@@ -70,6 +72,7 @@ const buildOverviewMessage = (overview: string): ChatMessage => ({
 
 const Chat = ({
   pdfData,
+  docId,
   medicineName,
   initialOverview,
   onBack,
@@ -194,14 +197,17 @@ const Chat = ({
         }));
       if (history.length > 0 && history[history.length - 1].role === "user") history.pop();
 
-      const result = await queryLeafletPdf({
-        data: {
-          pdfBase64: pdfData,
-          question: text,
-          medicineName,
-          history,
-        },
+      // Prefer the lightweight docId (no PDF upload) when we have it; fall back to
+      // the full PDF only if the server's cache no longer has it (DOC_NOT_CACHED).
+      const baseData = { question: text, medicineName, history };
+      let result = await queryLeafletPdf({
+        data: docId ? { ...baseData, docId } : { ...baseData, pdfBase64: pdfData },
       });
+      if (!result.success && result.error === "DOC_NOT_CACHED") {
+        result = await queryLeafletPdf({
+          data: { ...baseData, docId, pdfBase64: pdfData },
+        });
+      }
 
       // Reset/superseded while this query was in flight — drop the result.
       if (queryRequestId.current !== reqId) return;

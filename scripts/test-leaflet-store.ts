@@ -7,6 +7,7 @@ import {
   validateCitedPages,
   pageParagraphs,
   selectFallbackParagraphs,
+  peekLeafletDoc,
 } from "../app/core/leafletStore.js";
 
 let passed = 0, failed = 0;
@@ -84,6 +85,11 @@ scenario("selectFallbackParagraphs targets the quote paragraph and caps output",
     true,
     "caps when no quote",
   );
+});
+
+scenario("peekLeafletDoc returns undefined for an unknown/evicted docId", () => {
+  // Drives the DOC_NOT_CACHED → client re-uploads-PDF fallback path.
+  assertEqual(peekLeafletDoc("0".repeat(64)), undefined, "unknown docId -> undefined");
 });
 
 console.log(`\nRESULTS: ${passed} passed, ${failed} failed`);

@@ -152,8 +152,11 @@ export function selectFallbackParagraphs(
   return (overlapping.length ? overlapping : paras.slice(0, max)).slice(0, max);
 }
 
-// Module-level cache: PDF hash → parsed page-doc. Replaces the two duplicate
-// embedding caches in queryLeaflet.ts and extractMedicineSummary.ts.
+// Module-level LRU cache: PDF hash → parsed page-doc. Replaces the two duplicate
+// embedding caches in queryLeaflet.ts and extractMedicineSummary.ts. Bounded so a
+// long-lived server (Fly.io) can't accumulate parsed docs without limit — the
+// least-recently-used entry is evicted once past the cap.
+const MAX_CACHED_DOCS = 32;
 const docCache = new Map<string, LeafletDoc>();
 // In-flight dedup: the overview + warnings calls fire in parallel on first load
 // (App.tsx Promise.all), so a single cold parse must be shared, not run twice.
@@ -168,9 +171,40 @@ export function leafletCacheKey(pdfBase64: string): string {
   return hashPdf(pdfBase64);
 }
 
+// Read an entry and mark it most-recently-used (Map preserves insertion order, so
+// re-inserting moves it to the tail).
+function touch(key: string): LeafletDoc | undefined {
+  const doc = docCache.get(key);
+  if (doc) {
+    docCache.delete(key);
+    docCache.set(key, doc);
+  }
+  return doc;
+}
+
+// Insert, evicting least-recently-used entries once over the cap.
+function store(key: string, doc: LeafletDoc): void {
+  docCache.set(key, doc);
+  while (docCache.size > MAX_CACHED_DOCS) {
+    const oldest = docCache.keys().next().value as string | undefined;
+    if (oldest === undefined) break;
+    docCache.delete(oldest);
+  }
+}
+
+/**
+ * Look up an already-parsed leaflet by its cache key (PDF hash) WITHOUT the PDF
+ * bytes — lets chat turns send a lightweight docId instead of re-uploading the
+ * full base64 every message. Returns undefined if it was never parsed or has been
+ * evicted (the caller then falls back to getLeafletDoc with the PDF).
+ */
+export function peekLeafletDoc(docId: string): LeafletDoc | undefined {
+  return touch(docId);
+}
+
 export async function getLeafletDoc(pdfBase64: string): Promise<LeafletDoc> {
   const key = hashPdf(pdfBase64);
-  const cached = docCache.get(key);
+  const cached = touch(key);
   if (cached) return cached;
   const pending = inFlight.get(key);
   if (pending) return pending;
@@ -178,7 +212,7 @@ export async function getLeafletDoc(pdfBase64: string): Promise<LeafletDoc> {
   const load = (async () => {
     const pages = await extractPageTexts(pdfBase64);
     const doc: LeafletDoc = { pages, totalPages: pages.length }; // length === pdf.numpages
-    docCache.set(key, doc);
+    store(key, doc);
     return doc;
   })();
   inFlight.set(key, load);

@@ -1,10 +1,14 @@
 import { createServerFn } from "@tanstack/react-start";
 import { queryLeaflet, ChatTurn } from "../core/leafletProcessor";
-import { getLeafletDoc, leafletCacheKey } from "../core/leafletStore";
+import { getLeafletDoc, peekLeafletDoc, leafletCacheKey } from "../core/leafletStore";
 
 interface QueryRequest {
-  pdfBase64: string;
   question: string;
+  // Chat turns send a lightweight `docId` (the cached PDF hash) to avoid
+  // re-uploading the full base64 every message; `pdfBase64` is the fallback the
+  // client resends if the server reports DOC_NOT_CACHED (cache evicted/restarted).
+  docId?: string;
+  pdfBase64?: string;
   medicineName?: string;
   history?: ChatTurn[];
 }
@@ -13,13 +17,34 @@ export const queryLeafletPdf = createServerFn({ method: "POST" })
   .inputValidator((data: QueryRequest) => data)
   .handler(async ({ data }) => {
     try {
-      const doc = await getLeafletDoc(data.pdfBase64);
+      // Prefer the cached doc (no upload); fall back to parsing the uploaded PDF.
+      let doc = data.docId ? peekLeafletDoc(data.docId) : undefined;
+      let pdfHash = data.docId ?? "";
+      if (!doc) {
+        if (!data.pdfBase64) {
+          // docId was evicted/expired and no PDF was sent — ask the client to retry
+          // with the bytes.
+          return {
+            success: false,
+            error: "DOC_NOT_CACHED",
+            answer: "",
+            sources: [],
+            sourceQuote: null,
+            sourceQuotePage: null,
+            pageNumbers: [],
+            relevantPages: [],
+          };
+        }
+        doc = await getLeafletDoc(data.pdfBase64);
+        pdfHash = leafletCacheKey(data.pdfBase64);
+      }
+
       const result = await queryLeaflet(
         doc,
         data.history ?? [],
         data.question,
         data.medicineName ?? "",
-        leafletCacheKey(data.pdfBase64),
+        pdfHash,
       );
 
       return {

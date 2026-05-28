@@ -67,6 +67,9 @@ function AppContent() {
     dosage: "",
   });
   const [overview, setOverview] = useState<string>("");
+  // Server-side cache key for the parsed leaflet — chat turns send this instead of
+  // re-uploading the full PDF each message.
+  const [docId, setDocId] = useState<string>("");
   const [medicineSummary, setMedicineSummary] = useState<MedicineSummary | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
@@ -148,6 +151,9 @@ function AppContent() {
     if (!processResult.success) {
       throw new Error(processResult.error || "Falha ao processar folheto");
     }
+    // Remember the server-side cache key so chat turns reference the parsed leaflet
+    // by a lightweight docId instead of re-uploading the full PDF each message.
+    setDocId(processResult.docId ?? "");
     markStepComplete("process");
   };
 
@@ -467,6 +473,7 @@ function AppContent() {
       chat={
         <Chat
           pdfData={pdfData || ""}
+          docId={docId}
           medicineName={medicineInfo.name}
           initialOverview={overview}
           dosage={medicineInfo.dosage}
