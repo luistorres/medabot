@@ -36,7 +36,9 @@ export function sanitizeMedicineSummary(
 ): MedicineSummary {
   return {
     category: summary.category.trim() || "Medicamento",
-    indications: summary.indications.map((s) => s.trim()).filter(Boolean),
+    // Cap to keep "Para que serve" scannable — the prompt already asks for short,
+    // grouped, prefix-free phrases; this is a hard backstop against a long wall.
+    indications: summary.indications.map((s) => s.trim()).filter(Boolean).slice(0, 6),
     keyWarnings: summary.keyWarnings
       .map((s) => s.trim())
       .filter(Boolean)
@@ -105,7 +107,7 @@ export const extractMedicineSummary = createServerFn({
 
 Extrai:
 - category: categoria terapêutica em pt-PT, curta.
-- indications: frases curtas (pt-PT) sobre para que serve o medicamento.
+- indications: lista CURTA de indicações (pt-PT), começando diretamente pela condição ou finalidade. NÃO repitas prefixos como «Tratamento sintomático de/da» — começa pela condição (ex.: «Febre», «Estados gripais», «Enxaquecas diagnosticadas»). Agrupa as semelhantes numa só linha quando fizer sentido (ex.: junta dores de cabeça/dentes/ouvidos/menstruais/musculares) e devolve no máximo 6, das mais representativas.
 - keyWarnings: no máximo 2 avisos, cada um { text, anchor }. "text" é o aviso curto e factual em pt-PT, APENAS sobre (a) dose máxima diária recomendada, ou (b) interação importante (álcool ou outros medicamentos). NÃO incluas números de página no "text"; NÃO uses fórmulas como "consulte o médico" ou "salvo indicação médica" a menos que façam parte literal do aviso no folheto. "anchor" é um trecho VERBATIM curto copiado EXATAMENTE do folheto que comprova o aviso e TEM de incluir quaisquer números/doses do "text". Inclui um aviso só se constar do folheto; caso contrário devolve [].
 
 Não incluas números de página, marcadores de realce, nem texto fora do JSON.`,
