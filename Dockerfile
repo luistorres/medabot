@@ -1,41 +1,22 @@
-FROM node:24-slim
+# Official Playwright image: Chromium + all system deps pre-installed at /ms-playwright.
+# The tag MUST equal the playwright version in package-lock.json (see CI guard in
+# .github/workflows/fly-deploy.yml) so the pre-baked browser is the exact revision
+# the playwright package expects. This image runs Node 24 (ARG NODE_VERSION=24).
+FROM mcr.microsoft.com/playwright:v1.60.0-noble
 
-# Install system dependencies for Playwright
-RUN apt-get update && apt-get install -y \
-    wget \
-    gnupg \
-    ca-certificates \
-    fonts-liberation \
-    libasound2 \
-    libatk-bridge2.0-0 \
-    libatk1.0-0 \
-    libatspi2.0-0 \
-    libcups2 \
-    libdbus-1-3 \
-    libdrm2 \
-    libgtk-3-0 \
-    libnspr4 \
-    libnss3 \
-    libwayland-client0 \
-    libx11-6 \
-    libx11-xcb1 \
-    libxcb1 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxext6 \
-    libxfixes3 \
-    libxrandr2 \
-    libxss1 \
-    libxtst6 \
-    && rm -rf /var/lib/apt/lists/*
+# Browsers are pre-installed here by the base image. Make the lookup path explicit
+# so chromium.launch() still resolves it if the base image ever changes.
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 WORKDIR /app
 
-# Copy package files and scripts folder (needed for postinstall)
+# Copy package files and scripts folder (needed for postinstall: copy-pdf-worker)
 COPY package*.json ./
 COPY scripts ./scripts
 
-# Install all dependencies (including dev dependencies for build)
+# Install all dependencies (including dev dependencies for build).
+# Browsers are already present at /ms-playwright; the playwright npm package has no
+# install script, so this does not download browsers.
 RUN npm ci
 
 # Copy source code
@@ -43,9 +24,6 @@ COPY . .
 
 # Build the application
 RUN npm run build
-
-# Install Playwright browsers after build
-RUN npx playwright install --with-deps chromium
 
 # Remove dev dependencies to reduce image size
 RUN npm prune --production
