@@ -26,7 +26,7 @@ Requires `OPENAI_API_KEY` in `.envrc` (loaded via direnv). Copy from `.envrc.exa
 - **PDF Processing**: `pdf-parse` for text extraction
 - **Web Scraping**: Playwright (headless Chromium)
 - **Validation**: Zod schemas
-- **Deployment**: Fly.io via Docker (node:20-slim, port 3000, Madrid region)
+- **Deployment**: Fly.io via Docker (mcr.microsoft.com/playwright:v1.60.0-noble base / Node 24, port 3000, Madrid region). The image tag must match the locked playwright version (enforced by a CI guard in fly-deploy.yml).
 
 ## Architecture
 
