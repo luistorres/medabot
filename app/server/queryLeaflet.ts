@@ -1,48 +1,57 @@
 import { createServerFn } from "@tanstack/react-start";
-import { processLeaflet, queryLeaflet, ChunkWithEmbedding } from "../core/leafletProcessor";
-import { createHash } from "crypto";
+import { queryLeaflet, ChatTurn } from "../core/leafletProcessor";
+import { getLeafletDoc, peekLeafletDoc, leafletCacheKey } from "../core/leafletStore";
 
 interface QueryRequest {
-  pdfBase64: string;
   question: string;
+  // Chat turns send a lightweight `docId` (the cached PDF hash) to avoid
+  // re-uploading the full base64 every message; `pdfBase64` is the fallback the
+  // client resends if the server reports DOC_NOT_CACHED (cache evicted/restarted).
+  docId?: string;
+  pdfBase64?: string;
+  medicineName?: string;
+  history?: ChatTurn[];
 }
 
-// Module-level cache: PDF hash → processed chunks
-const chunkCache = new Map<string, ChunkWithEmbedding[]>();
-
-function hashPdf(pdfBase64: string): string {
-  return createHash("sha256").update(pdfBase64).digest("hex");
-}
-
-export const queryLeafletPdf = createServerFn({
-  method: "POST",
-})
+export const queryLeafletPdf = createServerFn({ method: "POST" })
   .inputValidator((data: QueryRequest) => data)
   .handler(async ({ data }) => {
     try {
-      const pdfHash = hashPdf(data.pdfBase64);
-      let chunks = chunkCache.get(pdfHash);
-
-      if (!chunks) {
-        // Process only on first query for this PDF
-        const result = await processLeaflet(data.pdfBase64);
-        chunks = result.chunks;
-        chunkCache.set(pdfHash, chunks);
+      // Prefer the cached doc (no upload); fall back to parsing the uploaded PDF.
+      let doc = data.docId ? peekLeafletDoc(data.docId) : undefined;
+      let pdfHash = data.docId ?? "";
+      if (!doc) {
+        if (!data.pdfBase64) {
+          // docId was evicted/expired and no PDF was sent — ask the client to retry
+          // with the bytes.
+          return {
+            success: false,
+            error: "DOC_NOT_CACHED",
+            answer: "",
+            sources: [],
+            sourceQuote: null,
+            sourceQuotePage: null,
+            pageNumbers: [],
+            relevantPages: [],
+          };
+        }
+        doc = await getLeafletDoc(data.pdfBase64);
+        pdfHash = leafletCacheKey(data.pdfBase64);
       }
 
-      // Query the leaflet
-      const result = await queryLeaflet(chunks, data.question);
+      const result = await queryLeaflet(
+        doc,
+        data.history ?? [],
+        data.question,
+        data.medicineName ?? "",
+        pdfHash,
+      );
 
       return {
         success: true,
         answer: result.answer,
-        sourceCount: result.sourceDocuments.length,
-        // Forward the grounded source passages (text + page) so the client can
-        // wash the cited passage in the PDF when a citation is clicked.
-        sources: result.sourceDocuments.map((c) => ({
-          page: c.page,
-          text: c.text,
-        })),
+        sourceCount: result.sources.length,
+        sources: result.sources,
         sourceQuote: result.sourceQuote,
         sourceQuotePage: result.sourceQuotePage,
         pageNumbers: result.pageNumbers || [],
@@ -53,7 +62,8 @@ export const queryLeafletPdf = createServerFn({
       return {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
-        answer: "Desculpe, encontrei um erro ao processar a sua questão. Por favor, tente novamente.",
+        answer:
+          "Desculpe, encontrei um erro ao processar a sua questão. Por favor, tente novamente.",
         sources: [],
         sourceQuote: null,
         sourceQuotePage: null,

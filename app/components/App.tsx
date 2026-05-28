@@ -67,6 +67,9 @@ function AppContent() {
     dosage: "",
   });
   const [overview, setOverview] = useState<string>("");
+  // Server-side cache key for the parsed leaflet — chat turns send this instead of
+  // re-uploading the full PDF each message.
+  const [docId, setDocId] = useState<string>("");
   const [medicineSummary, setMedicineSummary] = useState<MedicineSummary | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
@@ -97,9 +100,10 @@ function AppContent() {
   };
 
   // Step: Fetch PDF
-  const runFetchStep = async (info: IdentifyMedicineResponse, forceRefresh?: boolean, selectedCandidate?: Candidate): Promise<{ pdfBase64: string; needsDisambiguation: boolean }> => {
+  const runFetchStep = async (info: IdentifyMedicineResponse, forceRefresh?: boolean, selectedCandidate?: Candidate): Promise<{ pdfBase64: string; needsDisambiguation: boolean; medicineName: string }> => {
     setCurrentStep("fetch");
     setSearchMessage(`A procurar o folheto de '${info.name}'...`);
+    let resolvedName = info.name;
 
     const pdfResponse = await fetchRegulatoryPdf({ data: { ...info, forceRefresh, selectedCandidate } });
 
@@ -109,7 +113,7 @@ function AppContent() {
       setDisambiguation(pdfResponse.candidates);
       setSearchMessage("");
       markStepComplete("fetch");
-      return { pdfBase64: "", needsDisambiguation: true };
+      return { pdfBase64: "", needsDisambiguation: true, medicineName: info.name };
     }
 
     if (!pdfResponse || !pdfResponse.data) {
@@ -119,6 +123,7 @@ function AppContent() {
     // Enrich medicineInfo with matched medicine data from INFARMED
     if (pdfResponse.matchedMedicine) {
       const m = pdfResponse.matchedMedicine;
+      resolvedName = m.name || info.name;
       setMedicineInfo((prev) => ({
         ...prev,
         name: m.name || prev.name,
@@ -133,7 +138,7 @@ function AppContent() {
     setSavedPdfBase64(pdfResponse.data);
     setSearchMessage("");
     markStepComplete("fetch");
-    return { pdfBase64: pdfResponse.data, needsDisambiguation: false };
+    return { pdfBase64: pdfResponse.data, needsDisambiguation: false, medicineName: resolvedName };
   };
 
   // Step: Process PDF
@@ -146,11 +151,14 @@ function AppContent() {
     if (!processResult.success) {
       throw new Error(processResult.error || "Falha ao processar folheto");
     }
+    // Remember the server-side cache key so chat turns reference the parsed leaflet
+    // by a lightweight docId instead of re-uploading the full PDF each message.
+    setDocId(processResult.docId ?? "");
     markStepComplete("process");
   };
 
   // Step: Generate overview + extract structured summary
-  const runOverviewStep = async (pdfBase64: string) => {
+  const runOverviewStep = async (pdfBase64: string, medicineName: string) => {
     setCurrentStep("overview");
 
     // Run both queries in parallel
@@ -158,7 +166,9 @@ function AppContent() {
       queryLeafletPdf({
         data: {
           pdfBase64: pdfBase64,
-          question: "What is this medicine used for? Provide a brief overview.",
+          question: "Para que serve este medicamento? Dá um resumo breve.",
+          medicineName,
+          history: [],
         },
       }),
       extractMedicineSummary({ data: pdfBase64 }),
@@ -195,6 +205,7 @@ function AppContent() {
     // Track which step is running so an async failure is attributed to the right
     // step — component state would be stale inside this closure's catch block.
     let activeStep = startFromStep || "fetch";
+    let resolvedName = info.name;
     try {
       // Step: Fetch PDF
       let pdfBase64 = savedPdfBase64;
@@ -202,6 +213,7 @@ function AppContent() {
         activeStep = "fetch";
         const fetchResult = await runFetchStep(info, forceRefresh, selectedCandidate);
         pdfBase64 = fetchResult.pdfBase64;
+        resolvedName = fetchResult.medicineName ?? resolvedName;
 
         // Pause pipeline — let the user pick the correct candidate
         if (fetchResult.needsDisambiguation) {
@@ -223,7 +235,7 @@ function AppContent() {
       // Step: Overview
       if (!startFromStep || startFromStep === "fetch" || startFromStep === "process" || startFromStep === "overview") {
         activeStep = "overview";
-        await runOverviewStep(pdfBase64);
+        await runOverviewStep(pdfBase64, resolvedName);
       }
 
       // Ready
@@ -309,6 +321,7 @@ function AppContent() {
     setTotalPages(0);
     setSavedPdfBase64(null);
     setOverview("");
+    setDocId("");
     setMedicineSummary(null);
     setCompletedSteps([]);
     setCurrentStep("");
@@ -461,6 +474,7 @@ function AppContent() {
       chat={
         <Chat
           pdfData={pdfData || ""}
+          docId={docId}
           medicineName={medicineInfo.name}
           initialOverview={overview}
           dosage={medicineInfo.dosage}

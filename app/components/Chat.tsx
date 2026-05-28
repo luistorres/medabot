@@ -5,7 +5,6 @@ import { usePDF } from "../context/PDFContext";
 import { useScrollToBottom } from "../hooks/useScrollToBottom";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useRotatingPlaceholder } from "../hooks/useRotatingPlaceholder";
-import { parseMessageWithReferences } from "../utils/parseReferences";
 import { formatMessage } from "../utils/formatMessage";
 import { isNotFoundAnswer } from "../utils/isNotFoundAnswer";
 import Button from "./ui/Button";
@@ -31,6 +30,8 @@ interface ChatMessage {
 
 interface ChatProps {
   pdfData: string;
+  /** Cache key for the already-parsed leaflet; lets chat turns skip re-uploading the PDF. */
+  docId?: string;
   medicineName: string;
   initialOverview?: string;
   onBack?: () => void;
@@ -71,6 +72,7 @@ const buildOverviewMessage = (overview: string): ChatMessage => ({
 
 const Chat = ({
   pdfData,
+  docId,
   medicineName,
   initialOverview,
   onBack,
@@ -167,17 +169,45 @@ const Chat = ({
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    setMessages((prev) => {
+      let base = prev;
+      const last = prev[prev.length - 1];
+      if (last?.type === "error") {
+        base = prev.slice(0, -1); // drop the stale error bubble on any new ask
+        // On an exact retry, also drop the failed user bubble it retried (avoid dup).
+        if (
+          last.retryQuestion === text &&
+          base[base.length - 1]?.type === "user" &&
+          base[base.length - 1].content === text
+        ) {
+          base = base.slice(0, -1);
+        }
+      }
+      return [...base, userMessage];
+    });
     setQuestion("");
     setLoading(true);
 
     try {
-      const result = await queryLeafletPdf({
-        data: {
-          pdfBase64: pdfData,
-          question: text,
-        },
+      const history = messages
+        .filter((m) => (m.type === "user" || m.type === "assistant") && !m.isOverview)
+        .map((m) => ({
+          role: m.type === "user" ? ("user" as const) : ("assistant" as const),
+          content: m.content.replace(/==/g, ""),
+        }));
+      if (history.length > 0 && history[history.length - 1].role === "user") history.pop();
+
+      // Prefer the lightweight docId (no PDF upload) when we have it; fall back to
+      // the full PDF only if the server's cache no longer has it (DOC_NOT_CACHED).
+      const baseData = { question: text, medicineName, history };
+      let result = await queryLeafletPdf({
+        data: docId ? { ...baseData, docId } : { ...baseData, pdfBase64: pdfData },
       });
+      if (!result.success && result.error === "DOC_NOT_CACHED") {
+        result = await queryLeafletPdf({
+          data: { ...baseData, docId, pdfBase64: pdfData },
+        });
+      }
 
       // Reset/superseded while this query was in flight — drop the result.
       if (queryRequestId.current !== reqId) return;
@@ -246,18 +276,9 @@ const Chat = ({
     const formatted = formatMessage(content);
     return (
       <div className="font-serif text-[15px] leading-[1.6] text-ink space-y-1">
-        {formatted.map((node, i) => {
-          if (typeof node === "string") {
-            return (
-              <span key={i}>
-                {parseMessageWithReferences(node, {
-                  onPageClick: jumpToPage,
-                })}
-              </span>
-            );
-          }
-          return node;
-        })}
+        {formatted.map((node, i) =>
+          typeof node === "string" ? <span key={i}>{node}</span> : node,
+        )}
       </div>
     );
   };
@@ -512,6 +533,9 @@ const Chat = ({
               <Icon.send className="w-[18px] h-[18px]" />
             </button>
           </div>
+          <p className="mt-2 text-[11px] leading-snug text-muted text-center">
+            O Medabot explica o folheto. Não substitui o seu médico ou farmacêutico.
+          </p>
         </div>
       </div>
     </div>

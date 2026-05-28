@@ -10,16 +10,11 @@
 import {
   sanitizeMedicineSummary,
   groundKeyWarnings,
-  dedupeChunks,
+  stripIndicationStem,
 } from "../app/server/extractMedicineSummary.js";
-import type { ChunkWithEmbedding } from "../app/core/leafletProcessor.js";
 
-// Minimal chunk factory — dedupeChunks/groundKeyWarnings only read page + text.
-const chunk = (page: number, text: string): ChunkWithEmbedding => ({
-  page,
-  text,
-  embedding: [],
-});
+// groundKeyWarnings only reads page + text.
+const chunk = (page: number, text: string): { page: number; text: string } => ({ page, text });
 
 let passed = 0;
 let failed = 0;
@@ -58,10 +53,48 @@ scenario("trims fields, drops empty array entries, and caps warnings at two", ()
     }),
     {
       category: "Analgésico e antipirético",
-      indications: ["dor", "febre"],
+      // indications are capitalized by stripIndicationStem (display normalization).
+      indications: ["Dor", "Febre"],
       keyWarnings: ["máximo 4 g por dia", "evitar álcool"],
     },
     "sanitized summary",
+  );
+});
+
+scenario("strips the redundant 'Alívio/Tratamento [sintomático] de' indication stem", () => {
+  assertEqual(stripIndicationStem("Alívio sintomático de dores de cabeça"), "Dores de cabeça", "alívio sintomático de");
+  assertEqual(stripIndicationStem("Tratamento sintomático da febre"), "Febre", "tratamento sintomático da");
+  assertEqual(stripIndicationStem("Alívio de dores"), "Dores", "alívio de");
+  assertEqual(stripIndicationStem("Estados gripais"), "Estados gripais", "no stem unchanged");
+});
+
+scenario("salvages the model's mangled stem ('sintático' typo)", () => {
+  assertEqual(
+    stripIndicationStem("Alívio sintático de dores musculares (contraturas)"),
+    "Dores musculares (contraturas)",
+    "mangled stem stripped",
+  );
+});
+
+scenario("indications: strips stems, dedupes, and caps at 6", () => {
+  const { indications } = sanitizeMedicineSummary({
+    category: "X",
+    indications: [
+      "Alívio sintomático de febre",
+      "Alívio sintomático de dores de cabeça",
+      "Alívio sintomático de dores de cabeça", // duplicate after strip
+      "Tratamento sintomático de estados gripais",
+      "Dores de dentes",
+      "Dores menstruais",
+      "Dores musculares",
+      "Reações à vacinação", // 7th distinct → dropped by the cap
+    ],
+    keyWarnings: [],
+  });
+  assertEqual(
+    indications,
+    ["Febre", "Dores de cabeça", "Estados gripais", "Dores de dentes", "Dores menstruais", "Dores musculares"],
+    "stem-stripped, deduped, capped at 6",
   );
 });
 
@@ -210,27 +243,18 @@ scenario("caps grounded warnings at two", () => {
   );
 });
 
-// ── dedupeChunks ────────────────────────────────────────────────────────────
-scenario("collapses identical page+text chunks, preserves order", () => {
-  const result = dedupeChunks([
-    chunk(1, "alpha"),
-    chunk(2, "beta"),
-    chunk(1, "alpha"),
-    chunk(2, "gamma"),
-  ]);
+scenario("keeps a warning whose anchor appears anywhere on a whole-page chunk", () => {
+  const wholePage = [
+    chunk(
+      5,
+      "Secção 2. Advertências. Em geral, leia tudo. Não tome mais de 4 g de paracetamol por dia. " +
+        "Mais adiante, outro parágrafo não relacionado fala de conservação.",
+    ),
+  ];
   assertEqual(
-    result.map((c) => `${c.page}:${c.text}`),
-    ["1:alpha", "2:beta", "2:gamma"],
-    "deduped, order-stable",
-  );
-});
-
-scenario("keeps same text on different pages", () => {
-  const result = dedupeChunks([chunk(1, "same"), chunk(4, "same")]);
-  assertEqual(
-    result.map((c) => `${c.page}:${c.text}`),
-    ["1:same", "4:same"],
-    "distinct pages preserved",
+    groundKeyWarnings([{ text: "Dose máxima: 4 g por dia", anchor: "mais de 4 g de paracetamol" }], wholePage),
+    ["Dose máxima: 4 g por dia"],
+    "anchor anywhere on the page grounds the warning",
   );
 });
 

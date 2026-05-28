@@ -1,25 +1,16 @@
 import { createServerFn } from "@tanstack/react-start";
-import { processLeaflet } from "../core/leafletProcessor";
+import { getLeafletDoc, leafletCacheKey } from "../core/leafletStore";
 
-export const processLeafletPdf = createServerFn({
-  method: "POST",
-})
-  .inputValidator((pdfBase64: string) => pdfBase64)
+export const processLeafletPdf = createServerFn({ method: "POST" })
+  .inputValidator((data: string) => data)
   .handler(async ({ data }) => {
     try {
-      const result = await processLeaflet(data);
-
-      // Return serializable data (can't return the actual retriever/vectorstore)
-      return {
-        success: true,
-        documentCount: result.documentCount,
-        message: `Successfully processed ${result.documentCount} document chunks`,
-      };
+      const doc = await getLeafletDoc(data);
+      // Return the cache key so the client can reference this parsed leaflet by a
+      // lightweight `docId` on chat turns instead of re-uploading the full PDF.
+      return { success: true, pageCount: doc.totalPages, docId: leafletCacheKey(data) };
     } catch (error) {
       console.error("Error processing leaflet:", error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      };
+      return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
     }
   });
