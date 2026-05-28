@@ -1,15 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
-import {
-  processLeaflet,
-  retrieveRelevantChunks,
-  ChunkWithEmbedding,
-} from "../core/leafletProcessor";
 import { openai } from "../core/llm";
+import { getLeafletDoc, assembleLeafletContext } from "../core/leafletStore";
 import { normalizeForMatch } from "../utils/pdfHighlight";
 import { isNotFoundAnswer } from "../utils/isNotFoundAnswer";
-import { createHash } from "crypto";
 
 export interface MedicineSummary {
   category: string;
@@ -31,13 +26,6 @@ const ExtractionSchema = z.object({
   ),
 });
 
-// Reuse the same chunk cache shape as the leaflet query path.
-const chunkCache = new Map<string, ChunkWithEmbedding[]>();
-
-function hashPdf(pdfBase64: string): string {
-  return createHash("sha256").update(pdfBase64).digest("hex");
-}
-
 // Negative / not-found phrasing a model may leak into a structured array despite
 // being told to return [] (restores + broadens the filtering added in 1ad0206).
 const NEGATIVE_WARNING_RE =
@@ -57,11 +45,11 @@ export function sanitizeMedicineSummary(
 }
 
 /**
- * Keep only warnings that are grounded in the retrieved leaflet text. A warning
- * survives when its model-provided `anchor` (a short verbatim snippet) is found
- * — accent/case-insensitively — in one of the retrieved chunks, and its `text`
- * is not an empty/negative/not-found phrase. Drops anything ungrounded so a
- * hallucinated dose/interaction never reaches the UI. Caps at 2.
+ * Keep only warnings that are grounded in the page text. A warning survives
+ * when its model-provided `anchor` (a short verbatim snippet) is found —
+ * accent/case-insensitively — anywhere on a page, and its `text` is not an
+ * empty/negative/not-found phrase. Drops anything ungrounded so a hallucinated
+ * dose/interaction never reaches the UI. Caps at 2.
  */
 export function groundKeyWarnings(
   warnings: { text: string; anchor: string }[],
@@ -95,57 +83,14 @@ export function groundKeyWarnings(
   return out;
 }
 
-function formatContext(chunks: ChunkWithEmbedding[]): string {
-  return chunks
-    .map((c) => `[Página ${c.page}]\n${c.text}`)
-    .join("\n\n---\n\n");
-}
-
-export function dedupeChunks(
-  chunks: ChunkWithEmbedding[],
-): ChunkWithEmbedding[] {
-  const seen = new Set<string>();
-  const deduped: ChunkWithEmbedding[] = [];
-
-  for (const chunk of chunks) {
-    const key = `${chunk.page}:${chunk.text}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    deduped.push(chunk);
-  }
-
-  return deduped;
-}
-
 export const extractMedicineSummary = createServerFn({
   method: "POST",
 })
   .inputValidator((data: string) => data)
   .handler(async ({ data: pdfBase64 }): Promise<MedicineSummary> => {
     try {
-      const pdfHash = hashPdf(pdfBase64);
-      let chunks = chunkCache.get(pdfHash);
-
-      if (!chunks) {
-        const result = await processLeaflet(pdfBase64);
-        chunks = result.chunks;
-        chunkCache.set(pdfHash, chunks);
-      }
-
-      const [identityChunks, safetyChunks] = await Promise.all([
-        retrieveRelevantChunks(
-          chunks,
-          "categoria terapêutica, indicações, para que é utilizado este medicamento",
-          6,
-        ),
-        retrieveRelevantChunks(
-          chunks,
-          "dose máxima diária recomendada, interações importantes com álcool ou outros medicamentos",
-          6,
-        ),
-      ]);
-      const relevantChunks = dedupeChunks([...identityChunks, ...safetyChunks]);
-      const contextWithPages = formatContext(relevantChunks);
+      const doc = await getLeafletDoc(pdfBase64);
+      const contextWithPages = assembleLeafletContext(doc.pages);
 
       const response = await openai.chat.completions.parse({
         model: "gpt-5.4",
@@ -155,22 +100,16 @@ export const extractMedicineSummary = createServerFn({
         messages: [
           {
             role: "system",
-            content: `És um extrator de dados de folhetos informativos de medicamentos.
-
-Devolve apenas dados que constem explicitamente do contexto fornecido. Nunca inventes nem completes com conhecimento externo.
+            content: `És um extrator de dados de folhetos informativos de medicamentos. Devolve apenas dados que constem explicitamente do folheto. Nunca inventes nem completes com conhecimento externo.
 
 Extrai:
-- category: categoria terapêutica em português, curta.
-- indications: lista de frases curtas em português sobre para que serve o medicamento; sem frases completas.
-- keyWarnings: no máximo 2 avisos. Cada aviso é um objeto { text, anchor }: "text" é o aviso curto em português, apenas sobre (a) dose máxima diária recomendada, ou (b) interação importante com álcool ou outros medicamentos; "anchor" é um trecho VERBATIM curto (poucas palavras) copiado EXATAMENTE do contexto que comprova esse aviso, e TEM de incluir quaisquer números/doses mencionados no "text". Inclui um aviso apenas se constar explicitamente do folheto; caso contrário devolve []. Nunca inventes o anchor — tem de aparecer tal e qual no contexto.
+- category: categoria terapêutica em pt-PT, curta.
+- indications: frases curtas (pt-PT) sobre para que serve o medicamento.
+- keyWarnings: no máximo 2 avisos, cada um { text, anchor }. "text" é o aviso curto e factual em pt-PT, APENAS sobre (a) dose máxima diária recomendada, ou (b) interação importante (álcool ou outros medicamentos). NÃO incluas números de página no "text"; NÃO uses fórmulas como "consulte o médico" ou "salvo indicação médica" a menos que façam parte literal do aviso no folheto. "anchor" é um trecho VERBATIM curto copiado EXATAMENTE do folheto que comprova o aviso e TEM de incluir quaisquer números/doses do "text". Inclui um aviso só se constar do folheto; caso contrário devolve [].
 
-Não incluas citações de página, marcadores de realce, nem texto fora do JSON estruturado.`,
+Não incluas números de página, marcadores de realce, nem texto fora do JSON.`,
           },
-          {
-            role: "user",
-            content: `Contexto do folheto:
-${contextWithPages}`,
-          },
+          { role: "user", content: `Folheto informativo:\n${contextWithPages}` },
         ],
       });
 
@@ -184,14 +123,10 @@ ${contextWithPages}`,
       return sanitizeMedicineSummary({
         category: parsed?.category ?? "",
         indications: parsed?.indications ?? [],
-        keyWarnings: groundKeyWarnings(parsed?.keyWarnings ?? [], relevantChunks),
+        keyWarnings: groundKeyWarnings(parsed?.keyWarnings ?? [], doc.pages),
       });
     } catch (error) {
       console.error("Error extracting medicine summary:", error);
-      return {
-        category: "Medicamento",
-        indications: [],
-        keyWarnings: [],
-      };
+      return { category: "Medicamento", indications: [], keyWarnings: [] };
     }
   });
