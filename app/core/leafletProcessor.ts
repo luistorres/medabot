@@ -84,6 +84,12 @@ export async function queryLeaflet(
         .replace(/\s+/g, " ")
         .trim()
         .slice(0, 80) || "este medicamento";
+    // The current-turn question is the last client-controlled, previously-unbounded
+    // input — cap it (and strip markers) like history/name so a huge/crafted question
+    // can't blow up prompt size/cost on this endpoint.
+    const safeQuestion =
+      (question || "").replace(/==/g, "").replace(/\s+/g, " ").trim().slice(0, 2000) ||
+      "(sem pergunta)";
 
     const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       { role: "system", content: CHAT_SYSTEM_PROMPT },
@@ -92,7 +98,7 @@ export async function queryLeaflet(
         content: `Folheto informativo de ${safeName}:\n\n${context}`,
       },
       ...safeHistory.map((t) => ({ role: t.role, content: t.content })),
-      { role: "user", content: question },
+      { role: "user", content: safeQuestion },
     ];
 
     const response = await openai.chat.completions.parse({

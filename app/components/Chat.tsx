@@ -169,10 +169,15 @@ const Chat = ({
     setMessages((prev) => {
       let base = prev;
       const last = prev[prev.length - 1];
-      if (last?.type === "error" && last.retryQuestion === text) {
-        base = prev.slice(0, -1); // drop the stale error bubble
-        if (base[base.length - 1]?.type === "user" && base[base.length - 1].content === text) {
-          base = base.slice(0, -1); // drop the failed user bubble it retried
+      if (last?.type === "error") {
+        base = prev.slice(0, -1); // drop the stale error bubble on any new ask
+        // On an exact retry, also drop the failed user bubble it retried (avoid dup).
+        if (
+          last.retryQuestion === text &&
+          base[base.length - 1]?.type === "user" &&
+          base[base.length - 1].content === text
+        ) {
+          base = base.slice(0, -1);
         }
       }
       return [...base, userMessage];
