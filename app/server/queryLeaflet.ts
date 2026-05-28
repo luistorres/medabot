@@ -1,48 +1,32 @@
 import { createServerFn } from "@tanstack/react-start";
-import { processLeaflet, queryLeaflet, ChunkWithEmbedding } from "../core/leafletProcessor";
-import { createHash } from "crypto";
+import { queryLeaflet, ChatTurn } from "../core/leafletProcessor";
+import { getLeafletDoc, leafletCacheKey } from "../core/leafletStore";
 
 interface QueryRequest {
   pdfBase64: string;
   question: string;
+  medicineName?: string;
+  history?: ChatTurn[];
 }
 
-// Module-level cache: PDF hash → processed chunks
-const chunkCache = new Map<string, ChunkWithEmbedding[]>();
-
-function hashPdf(pdfBase64: string): string {
-  return createHash("sha256").update(pdfBase64).digest("hex");
-}
-
-export const queryLeafletPdf = createServerFn({
-  method: "POST",
-})
+export const queryLeafletPdf = createServerFn({ method: "POST" })
   .inputValidator((data: QueryRequest) => data)
   .handler(async ({ data }) => {
     try {
-      const pdfHash = hashPdf(data.pdfBase64);
-      let chunks = chunkCache.get(pdfHash);
-
-      if (!chunks) {
-        // Process only on first query for this PDF
-        const result = await processLeaflet(data.pdfBase64);
-        chunks = result.chunks;
-        chunkCache.set(pdfHash, chunks);
-      }
-
-      // Query the leaflet
-      const result = await queryLeaflet(chunks, data.question);
+      const doc = await getLeafletDoc(data.pdfBase64);
+      const result = await queryLeaflet(
+        doc,
+        data.history ?? [],
+        data.question,
+        data.medicineName ?? "",
+        leafletCacheKey(data.pdfBase64),
+      );
 
       return {
         success: true,
         answer: result.answer,
-        sourceCount: result.sourceDocuments.length,
-        // Forward the grounded source passages (text + page) so the client can
-        // wash the cited passage in the PDF when a citation is clicked.
-        sources: result.sourceDocuments.map((c) => ({
-          page: c.page,
-          text: c.text,
-        })),
+        sourceCount: result.sources.length,
+        sources: result.sources,
         sourceQuote: result.sourceQuote,
         sourceQuotePage: result.sourceQuotePage,
         pageNumbers: result.pageNumbers || [],
@@ -53,7 +37,8 @@ export const queryLeafletPdf = createServerFn({
       return {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
-        answer: "Desculpe, encontrei um erro ao processar a sua questão. Por favor, tente novamente.",
+        answer:
+          "Desculpe, encontrei um erro ao processar a sua questão. Por favor, tente novamente.",
         sources: [],
         sourceQuote: null,
         sourceQuotePage: null,

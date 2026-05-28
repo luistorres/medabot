@@ -193,6 +193,24 @@ scenario("rejects when the resolved span is under 20 characters", () => {
   );
 });
 
+scenario("resolves a short span inside one whole-page chunk", () => {
+  const page = {
+    page: 4,
+    text:
+      "Secção 3. Como tomar. A dose habitual é de um comprimido de 8 em 8 horas. " +
+      "Não tome mais de seis comprimidos por dia. Outras informações seguem aqui.",
+  };
+  const r = resolveSourceQuote("Não tome mais de seis", "mais de seis comprimidos por dia", [page]);
+  assertEqual(r?.page ?? null, 4, "short span on a whole page resolves to page 4");
+});
+
+scenario("rejects an over-long span on a whole page (falls back to null)", () => {
+  const filler = "palavra ".repeat(120); // > 400 chars between anchors
+  const page = { page: 2, text: `Início do trecho ${filler} fim do trecho aqui.` };
+  const r = resolveSourceQuote("Início do trecho palavra", "fim do trecho aqui", [page]);
+  assertEqual(r, null, "over-long span rejected");
+});
+
 console.log(`\nRESULTS: ${passed} passed, ${failed} failed`);
 if (failures.length) {
   console.log("Failed:");
