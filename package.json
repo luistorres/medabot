@@ -15,9 +15,10 @@
     "postinstall": "npm run copy-pdf-worker",
     "test:e2e": "tsx scripts/e2e-test.ts",
     "test:smoke": "tsx scripts/e2e-test.ts --smoke",
-    "test:unit": "tsx scripts/test-highlight.ts && tsx scripts/test-page-mapping.ts && tsx scripts/test-sourcequote.ts",
+    "test:unit": "tsx scripts/test-highlight.ts && tsx scripts/test-page-mapping.ts && tsx scripts/test-sourcequote.ts && tsx scripts/test-medicine-summary.ts",
     "test:highlight": "tsx scripts/test-highlight.ts",
-    "test:sourcequote": "tsx scripts/test-sourcequote.ts"
+    "test:sourcequote": "tsx scripts/test-sourcequote.ts",
+    "test:medicine-summary": "tsx scripts/test-medicine-summary.ts"
   },
   "dependencies": {
     "@tanstack/react-router": "^1.158.4",
