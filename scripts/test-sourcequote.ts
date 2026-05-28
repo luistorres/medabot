@@ -1,13 +1,16 @@
 #!/usr/bin/env npx tsx
 /**
- * Unit tests for sourceQuote validation. Pure functions — no PDF, model, or
- * network required.
+ * Unit tests for sourceQuote anchor resolution. Pure functions — no PDF, model,
+ * or network required.
+ *
+ * The model returns a short ANCHOR (first words of the grounding sentence);
+ * resolveSourceQuote expands it to the full sentence from the retrieved chunk.
  *
  * Usage:
  *   npx tsx scripts/test-sourcequote.ts
  */
 
-import { validateSourceQuote } from "../app/core/sourceQuote.js";
+import { resolveSourceQuote } from "../app/core/sourceQuote.js";
 
 // ── Minimal test harness ──────────────────────────────────────────────────────
 let passed = 0;
@@ -38,61 +41,46 @@ function scenario(name: string, fn: () => void) {
 
 console.log("\n=== sourceQuote Unit Tests ===\n");
 
-scenario("accepts a verbatim sentence inside one chunk", () => {
+scenario("expands a short anchor to its full sentence", () => {
   const chunks = [
     {
       page: 3,
-      text: "Este medicamento deve ser tomado com água, de preferência após uma refeição.",
+      text: "Este medicamento deve ser tomado com água. Outra informação irrelevante.",
     },
   ];
-
   assertEqual(
-    validateSourceQuote(
-      "deve ser tomado com água, de preferência após uma refeição",
-      chunks,
-    ),
-    {
-      quote: "deve ser tomado com água, de preferência após uma refeição",
-      page: 3,
-    },
-    "verbatim quote",
+    resolveSourceQuote("Este medicamento deve ser", chunks),
+    { quote: "Este medicamento deve ser tomado com água.", page: 3 },
+    "anchor → sentence",
   );
 });
 
-scenario("matches accent and case differences", () => {
+scenario("matches anchor with accent and case differences", () => {
   const chunks = [
     {
       page: 1,
       text: "A administração é recomendada após as refeições principais.",
     },
   ];
-
   assertEqual(
-    validateSourceQuote(
-      "ADMINISTRACAO E RECOMENDADA APOS AS REFEICOES PRINCIPAIS",
-      chunks,
-    ),
+    resolveSourceQuote("ADMINISTRACAO E RECOMENDADA", chunks),
     {
-      quote: "ADMINISTRACAO E RECOMENDADA APOS AS REFEICOES PRINCIPAIS",
+      quote: "A administração é recomendada após as refeições principais.",
       page: 1,
     },
     "accent/case-insensitive",
   );
 });
 
-scenario("cleans leading page prefix and highlight markers", () => {
+scenario("cleans page prefix and highlight markers from the anchor", () => {
   const chunks = [
     {
       page: 2,
       text: "Não tome este medicamento se tem alergia ao paracetamol.",
     },
   ];
-
   assertEqual(
-    validateSourceQuote(
-      " ==[Página 2] Não tome este medicamento se tem alergia ao paracetamol.== ",
-      chunks,
-    ),
+    resolveSourceQuote(" ==[Página 2] Não tome este medicamento== ", chunks),
     {
       quote: "Não tome este medicamento se tem alergia ao paracetamol.",
       page: 2,
@@ -101,9 +89,9 @@ scenario("cleans leading page prefix and highlight markers", () => {
   );
 });
 
-scenario("rejects quotes with fewer than three normalized words", () => {
+scenario("rejects an anchor with fewer than three words", () => {
   assertEqual(
-    validateSourceQuote("muito importante", [
+    resolveSourceQuote("muito importante", [
       { page: 1, text: "Este aviso é muito importante para todos." },
     ]),
     null,
@@ -111,40 +99,19 @@ scenario("rejects quotes with fewer than three normalized words", () => {
   );
 });
 
-scenario("rejects quotes longer than 400 characters", () => {
-  const longQuote = `${"palavra ".repeat(51)}fim`;
+scenario("rejects an anchor not present in any chunk", () => {
   assertEqual(
-    validateSourceQuote(longQuote, [{ page: 1, text: longQuote }]),
-    null,
-    "too long",
-  );
-});
-
-scenario("rejects quotes not present in any chunk", () => {
-  assertEqual(
-    validateSourceQuote("Este texto não aparece em lado nenhum.", [
-      { page: 1, text: "O folheto fala apenas de dosagem." },
+    resolveSourceQuote("isto nao aparece aqui", [
+      { page: 1, text: "O folheto fala apenas de dosagem e conservação." },
     ]),
     null,
     "not present",
   );
 });
 
-scenario("rejects quotes that span two chunks", () => {
-  const quote = "primeira parte segunda parte";
-  assertEqual(
-    validateSourceQuote(quote, [
-      { page: 1, text: "A frase começa com primeira parte" },
-      { page: 1, text: "segunda parte e termina aqui" },
-    ]),
-    null,
-    "cross-chunk span",
-  );
-});
-
 scenario("rejects null input", () => {
   assertEqual(
-    validateSourceQuote(null, [
+    resolveSourceQuote(null, [
       { page: 1, text: "Uma frase suficientemente longa para validar." },
     ]),
     null,
@@ -152,10 +119,10 @@ scenario("rejects null input", () => {
   );
 });
 
-scenario("rejects ambiguous matches across different pages", () => {
+scenario("rejects an anchor that resolves on different pages", () => {
   const text = "Conservar fora da vista e do alcance das crianças.";
   assertEqual(
-    validateSourceQuote(text, [
+    resolveSourceQuote("Conservar fora da vista", [
       { page: 1, text },
       { page: 4, text },
     ]),
@@ -164,15 +131,50 @@ scenario("rejects ambiguous matches across different pages", () => {
   );
 });
 
-scenario("accepts duplicate identical chunks on the same page", () => {
-  const text = "Conservar fora da vista e do alcance das crianças.";
+scenario("rejects an anchor that hits different sentences on the same page", () => {
   assertEqual(
-    validateSourceQuote(text, [
-      { page: 5, text },
-      { page: 5, text },
+    resolveSourceQuote("Tome o comprimido", [
+      {
+        page: 2,
+        text: "Tome o comprimido de manhã. Tome o comprimido à noite também.",
+      },
     ]),
-    { quote: text, page: 5 },
-    "same-page duplicate",
+    null,
+    "ambiguous sentences",
+  );
+});
+
+scenario("accepts a same-page anchor present in two overlapping chunks", () => {
+  // Realistic overlap: chunks overlap by 150 chars, so the grounding sentence
+  // appears whole in both adjacent same-page chunks (with different surrounding
+  // sentences). The matched sentence is identical, so accept.
+  const sentence = "Tomar um comprimido por dia durante cinco dias.";
+  assertEqual(
+    resolveSourceQuote("Tomar um comprimido por dia", [
+      { page: 7, text: `Indicações gerais sobre o uso. ${sentence} Mais texto.` },
+      { page: 7, text: `${sentence} Suspender depois do tratamento.` },
+    ]),
+    { quote: sentence, page: 7 },
+    "same-page overlap accepted",
+  );
+});
+
+scenario("rejects when the resolved sentence exceeds 400 characters", () => {
+  const longSentence = `${"palavra ".repeat(60)}fim`; // ~487 chars, no boundary
+  assertEqual(
+    resolveSourceQuote("palavra palavra palavra", [
+      { page: 1, text: longSentence },
+    ]),
+    null,
+    "resolved too long",
+  );
+});
+
+scenario("rejects when the resolved sentence is under 20 characters", () => {
+  assertEqual(
+    resolveSourceQuote("Tome a água", [{ page: 1, text: "Tome a água." }]),
+    null,
+    "resolved too short",
   );
 });
 
