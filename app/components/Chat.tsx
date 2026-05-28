@@ -494,7 +494,7 @@ const Chat = ({
               onFocus={() => setInputFocused(true)}
               onBlur={() => setInputFocused(false)}
               placeholder={placeholder}
-              className="flex-grow min-w-0 bg-transparent border-0 text-[15px] text-ink placeholder:text-muted focus:outline-none py-1.5"
+              className="flex-grow min-w-0 bg-transparent border-0 text-ink placeholder:text-muted focus:outline-none py-1.5"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();

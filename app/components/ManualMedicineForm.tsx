@@ -123,7 +123,7 @@ const ManualMedicineForm = ({
                 onBlur={() => handleBlur("name")}
                 placeholder="Ex: Paracetamol"
                 autoFocus
-                className={`w-full bg-paper border rounded-lg px-3 py-2.5 text-[15px] text-ink placeholder:text-faint focus:outline-none transition-colors ${
+                className={`w-full bg-paper border rounded-lg px-3 py-2.5 text-ink placeholder:text-faint focus:outline-none transition-colors ${
                   errors.name
                     ? "border-error bg-error-soft focus:border-error"
                     : "border-border focus:border-ink"
@@ -154,7 +154,7 @@ const ManualMedicineForm = ({
                 onChange={(e) => handleChange("activeSubstance", e.target.value)}
                 onBlur={() => handleBlur("activeSubstance")}
                 placeholder="Ex: Paracetamol"
-                className={`w-full bg-paper border rounded-lg px-3 py-2.5 text-[15px] text-ink placeholder:text-faint focus:outline-none transition-colors ${
+                className={`w-full bg-paper border rounded-lg px-3 py-2.5 text-ink placeholder:text-faint focus:outline-none transition-colors ${
                   errors.activeSubstance
                     ? "border-error bg-error-soft focus:border-error"
                     : "border-border focus:border-ink"
@@ -190,7 +190,7 @@ const ManualMedicineForm = ({
                 value={formData.brand}
                 onChange={(e) => handleChange("brand", e.target.value)}
                 placeholder="Ex: Ben-u-ron, Genérico"
-                className="w-full bg-paper border border-border rounded-lg px-3 py-2.5 text-[15px] text-ink placeholder:text-faint focus:border-ink focus:outline-none transition-colors"
+                className="w-full bg-paper border border-border rounded-lg px-3 py-2.5 text-ink placeholder:text-faint focus:border-ink focus:outline-none transition-colors"
               />
             </div>
 
@@ -209,7 +209,7 @@ const ManualMedicineForm = ({
                 value={formData.dosage}
                 onChange={(e) => handleChange("dosage", e.target.value)}
                 placeholder="Ex: 500 mg, 1 g"
-                className="w-full bg-paper border border-border rounded-lg px-3 py-2.5 text-[15px] text-ink placeholder:text-faint focus:border-ink focus:outline-none transition-colors"
+                className="w-full bg-paper border border-border rounded-lg px-3 py-2.5 text-ink placeholder:text-faint focus:border-ink focus:outline-none transition-colors"
               />
               <p className="mt-1 text-[12px] text-muted">
                 Ajuda a distinguir entre embalagens diferentes do mesmo medicamento
