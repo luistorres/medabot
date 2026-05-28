@@ -417,6 +417,7 @@ function AppContent() {
                 setDisambiguation(null);
                 setScreen({ name: "manualForm", origin: "disambiguation", initialData: medicineInfo });
               }}
+              onBack={handleReset}
             />
           )}
 
