@@ -39,9 +39,9 @@ function hashPdf(pdfBase64: string): string {
 }
 
 // Negative / not-found phrasing a model may leak into a structured array despite
-// being told to return [] (restores the filtering added in commit 1ad0206).
+// being told to return [] (restores + broadens the filtering added in 1ad0206).
 const NEGATIVE_WARNING_RE =
-  /^(nenhum|n[ãa]o (consta|consta(m)?|encontro|encontrei|se aplica|aplic|h[áa]))/i;
+  /^(nenhum|sem (informa|aviso)|n[ãa]o (consta|constam|encontr|encontrad|se aplica|aplic|h[áa]|existe|foram|foi))/i;
 
 export function sanitizeMedicineSummary(
   summary: MedicineSummary,
@@ -80,6 +80,13 @@ export function groundKeyWarnings(
     // Too few words to verify reliably — treat as ungrounded.
     if (normalizedAnchor.split(" ").filter(Boolean).length < 3) continue;
     if (!normalizedChunks.some((c) => c.includes(normalizedAnchor))) continue;
+
+    // The displayed text must not assert a number the verified anchor lacks —
+    // blocks a real anchor paired with an overstated/wrong dose (e.g. text
+    // "8 g/dia" with anchor "não tome mais de 4 g por dia").
+    const anchorDigits = new Set(normalizedAnchor.match(/\d+/g) ?? []);
+    const textDigits = normalizeForMatch(text).match(/\d+/g) ?? [];
+    if (!textDigits.every((d) => anchorDigits.has(d))) continue;
 
     out.push(text);
     if (out.length === 2) break;
@@ -155,7 +162,7 @@ Devolve apenas dados que constem explicitamente do contexto fornecido. Nunca inv
 Extrai:
 - category: categoria terapêutica em português, curta.
 - indications: lista de frases curtas em português sobre para que serve o medicamento; sem frases completas.
-- keyWarnings: no máximo 2 avisos. Cada aviso é um objeto { text, anchor }: "text" é o aviso curto em português, apenas sobre (a) dose máxima diária recomendada, ou (b) interação importante com álcool ou outros medicamentos; "anchor" é um trecho VERBATIM curto (poucas palavras) copiado EXATAMENTE do contexto que comprova esse aviso. Inclui um aviso apenas se constar explicitamente do folheto; caso contrário devolve []. Nunca inventes o anchor — tem de aparecer tal e qual no contexto.
+- keyWarnings: no máximo 2 avisos. Cada aviso é um objeto { text, anchor }: "text" é o aviso curto em português, apenas sobre (a) dose máxima diária recomendada, ou (b) interação importante com álcool ou outros medicamentos; "anchor" é um trecho VERBATIM curto (poucas palavras) copiado EXATAMENTE do contexto que comprova esse aviso, e TEM de incluir quaisquer números/doses mencionados no "text". Inclui um aviso apenas se constar explicitamente do folheto; caso contrário devolve []. Nunca inventes o anchor — tem de aparecer tal e qual no contexto.
 
 Não incluas citações de página, marcadores de realce, nem texto fora do JSON estruturado.`,
           },

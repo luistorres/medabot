@@ -134,6 +134,54 @@ scenario("drops negative / not-found warning text", () => {
   );
 });
 
+scenario("drops a warning whose dose number is absent from the anchor", () => {
+  // Anchor is real (4 g) but text overstates the dose (8 g) — must be dropped.
+  assertEqual(
+    groundKeyWarnings(
+      [{ text: "Dose máxima: 8 g por dia", anchor: "mais de 4 g de paracetamol" }],
+      leaflet,
+    ),
+    [],
+    "overstated dose dropped",
+  );
+});
+
+scenario("keeps a warning whose dose number matches the anchor", () => {
+  assertEqual(
+    groundKeyWarnings(
+      [{ text: "Dose máxima: 4 g por dia", anchor: "mais de 4 g de paracetamol" }],
+      leaflet,
+    ),
+    ["Dose máxima: 4 g por dia"],
+    "matching dose kept",
+  );
+});
+
+scenario("keeps a number-free warning grounded by its anchor", () => {
+  assertEqual(
+    groundKeyWarnings(
+      [{ text: "Evitar álcool durante o tratamento", anchor: "evitar o consumo de álcool" }],
+      leaflet,
+    ),
+    ["Evitar álcool durante o tratamento"],
+    "non-numeric warning kept",
+  );
+});
+
+scenario("drops broadened negatives (sem informação / não foram encontradas)", () => {
+  assertEqual(
+    groundKeyWarnings(
+      [
+        { text: "Sem informação sobre interações", anchor: "evitar o consumo de álcool" },
+        { text: "Não foram encontradas interações", anchor: "evitar o consumo de álcool" },
+      ],
+      leaflet,
+    ),
+    [],
+    "broadened negatives dropped",
+  );
+});
+
 scenario("drops a too-short (unverifiable) anchor", () => {
   assertEqual(
     groundKeyWarnings([{ text: "Cuidado", anchor: "4 g" }], leaflet),
