@@ -10,10 +10,12 @@ interface PDFContextType {
   activeTab: TabType;
   cameFromChat: boolean;
   lastJumpedPage: number | null;
+  /** Source passages to wash on the jumped page (from the clicked citation). */
+  highlightTexts: string[];
   setCurrentPage: (page: number) => void;
   setPdfData: (data: string | null) => void;
   setTotalPages: (total: number) => void;
-  jumpToPage: (page: number) => void;
+  jumpToPage: (page: number, highlightTexts?: string[]) => void;
   setIsPdfViewerOpen: (open: boolean) => void;
   setActiveTab: (tab: TabType) => void;
   setCameFromChat: (value: boolean) => void;
@@ -30,17 +32,22 @@ export const PDFProvider = ({ children }: { children: ReactNode }) => {
   const [activeTab, setActiveTab] = useState<TabType>("chat");
   const [cameFromChat, setCameFromChat] = useState<boolean>(false);
   const [lastJumpedPage, setLastJumpedPage] = useState<number | null>(null);
+  const [highlightTexts, setHighlightTexts] = useState<string[]>([]);
 
-  const jumpToPage = useCallback((page: number) => {
-    setIsPdfViewerOpen(true);
-    setActiveTab("pdf");
-    setCameFromChat(true);
-    setLastJumpedPage(page);
+  const jumpToPage = useCallback(
+    (page: number, texts: string[] = []) => {
+      setIsPdfViewerOpen(true);
+      setActiveTab("pdf");
+      setCameFromChat(true);
+      setLastJumpedPage(page);
+      setHighlightTexts(texts);
 
-    if (page >= 1 && (totalPages === 0 || page <= totalPages)) {
-      setCurrentPage(page);
-    }
-  }, [totalPages]);
+      if (page >= 1 && (totalPages === 0 || page <= totalPages)) {
+        setCurrentPage(page);
+      }
+    },
+    [totalPages]
+  );
 
   return (
     <PDFContext.Provider
@@ -52,6 +59,7 @@ export const PDFProvider = ({ children }: { children: ReactNode }) => {
         activeTab,
         cameFromChat,
         lastJumpedPage,
+        highlightTexts,
         setCurrentPage,
         setPdfData,
         setTotalPages,

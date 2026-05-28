@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { usePDF } from "../context/PDFContext";
+import { computeHighlightItemIndices, escapeHtml } from "../utils/pdfHighlight";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { usePinchZoom } from "../hooks/usePinchZoom";
 import { useSwipeNavigation } from "../hooks/useSwipeNavigation";
@@ -24,6 +25,9 @@ const PDFViewer = ({ onClose, width = 40, isTabMode = false }: PDFViewerProps) =
       try {
         const reactPdf = await import("react-pdf");
         reactPdf.pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+        // Text layer CSS is required for customTextRenderer highlighting; loaded
+        // here (client-only) to stay SSR-safe like the rest of react-pdf.
+        await import("react-pdf/dist/Page/TextLayer.css");
 
         if (mounted) {
           setPdfComponents({
@@ -46,11 +50,29 @@ const PDFViewer = ({ onClose, width = 40, isTabMode = false }: PDFViewerProps) =
     currentPage,
     totalPages,
     lastJumpedPage,
+    highlightTexts,
     setCurrentPage,
     setTotalPages,
     isPdfViewerOpen,
     setIsPdfViewerOpen,
   } = usePDF();
+
+  // Text items of the currently-rendered page (from react-pdf onGetTextSuccess),
+  // used to map cited passages to the text-layer item indices we wash amber.
+  const [pageTextItems, setPageTextItems] = useState<{ str: string }[]>([]);
+
+  const highlightItemSet = useMemo(
+    () => computeHighlightItemIndices(pageTextItems, highlightTexts),
+    [pageTextItems, highlightTexts]
+  );
+
+  const customTextRenderer = useCallback(
+    ({ str, itemIndex }: { str: string; itemIndex: number }) =>
+      highlightItemSet.has(itemIndex)
+        ? `<mark class="mb-pdf-hl">${escapeHtml(str)}</mark>`
+        : escapeHtml(str),
+    [highlightItemSet]
+  );
 
   const [loading, setLoading] = useState<boolean>(true);
   const [isHighlighting, setIsHighlighting] = useState(false);
@@ -78,7 +100,8 @@ const PDFViewer = ({ onClose, width = 40, isTabMode = false }: PDFViewerProps) =
     onSwipeRight: goToPreviousPage,
   });
 
-  // Amber wash highlight when jumping from chat
+  // Amber wash highlight when jumping from chat (brief page-level cue; the
+  // precise passage highlight is applied via customTextRenderer below).
   useEffect(() => {
     if (lastJumpedPage !== null) {
       setIsHighlighting(true);
@@ -86,6 +109,12 @@ const PDFViewer = ({ onClose, width = 40, isTabMode = false }: PDFViewerProps) =
       return () => clearTimeout(timer);
     }
   }, [lastJumpedPage]);
+
+  // Clear stale text items when the page changes; onGetTextSuccess repopulates
+  // for the new page, so the passage highlight only applies to matching pages.
+  useEffect(() => {
+    setPageTextItems([]);
+  }, [currentPage]);
 
   const pdfDataUrl = pdfData ? `data:application/pdf;base64,${pdfData}` : null;
 
@@ -206,8 +235,12 @@ const PDFViewer = ({ onClose, width = 40, isTabMode = false }: PDFViewerProps) =
               pageNumber={currentPage}
               scale={scale}
               width={isDesktop ? (width * 16) - 32 : undefined}
-              renderTextLayer={false}
+              renderTextLayer={true}
               renderAnnotationLayer={false}
+              onGetTextSuccess={({ items }: { items: { str: string }[] }) =>
+                setPageTextItems(items)
+              }
+              customTextRenderer={customTextRenderer}
             />
           </div>
         </Document>
