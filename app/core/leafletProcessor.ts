@@ -4,6 +4,7 @@ import { z } from "zod";
 import { openai } from "./llm";
 import { highlightKeyClaim } from "./highlight";
 import { resolveSourceQuote } from "./sourceQuote";
+import { extractPageTexts } from "./leafletStore";
 
 export interface Chunk {
   text: string;
@@ -114,75 +115,8 @@ export async function retrieveRelevantChunks(
 // Process PDF: extract text, chunk per-page, embed
 export async function processLeaflet(pdfBase64: string) {
   try {
-    const pdfBuffer = Buffer.from(pdfBase64, "base64");
-
-    // Collect per-page text via pagerender callback.
-    // pdf-parse joins pages with PAGE_JOINER ("\n\n"), prepending it even before
-    // the first page, so: pdf.text === "\n\n" + pageTexts.join("\n\n")
-    const pageTexts: string[] = [];
-
-    const pagerender = (pageData: any): Promise<string> => {
-      const renderOptions = {
-        normalizeWhitespace: false,
-        disableCombineTextItems: false,
-      };
-      return pageData.getTextContent(renderOptions).then(
-        (textContent: any) => {
-          let lastY: number | undefined;
-          let text = "";
-          for (const item of textContent.items) {
-            if (lastY === item.transform[5] || lastY === undefined) {
-              text += item.str;
-            } else {
-              text += "\n" + item.str;
-            }
-            lastY = item.transform[5];
-          }
-          pageTexts.push(text);
-          return text;
-        },
-      );
-    };
-
-    const pdf = await pdfParse(pdfBuffer, { pagerender });
-
-    const totalPages = pdf.numpages;
-
-    // ── Issue 3: Invariant check ──────────────────────────────────────────────
-    // Verify that pagerender captured every page AND that pdf-parse's output
-    // matches the expected join (PAGE_JOINER prepended before each page).
-    // If either condition fails we fall back to whole-text chunking with a
-    // proportional page estimate so nothing silently breaks.
-    const expectedJoined = PAGE_JOINER + pageTexts.join(PAGE_JOINER);
-    const usePerPage =
-      pageTexts.length === pdf.numpages && pdf.text === expectedJoined;
-
-    let chunks: Chunk[];
-
-    if (usePerPage) {
-      // ── Issue 1: Per-page chunking ─────────────────────────────────────────
-      // Every chunk belongs to exactly one real page. No cross-page bleed.
-      chunks = chunkPagesWithNumbers(pageTexts);
-    } else {
-      // Fallback: chunk the whole text and assign pages proportionally.
-      // This path is taken when pagerender was skipped or pdf-parse changed its
-      // join format — still better than crashing.
-      console.warn(
-        `[processLeaflet] Per-page invariant failed (captured ${pageTexts.length} pages, ` +
-          `numpages=${pdf.numpages}, textMatch=${pdf.text === expectedJoined}). ` +
-          `Falling back to whole-text chunking with proportional page estimate.`,
-      );
-      const rawChunkTexts = splitIntoChunks(pdf.text);
-      chunks = rawChunkTexts.map((text, idx) => {
-        const position =
-          pdf.text.indexOf(text) / Math.max(pdf.text.length, 1);
-        const page = Math.max(
-          1,
-          Math.min(Math.ceil(position * totalPages) + 1, totalPages),
-        );
-        return { text, page };
-      });
-    }
+    const pages = await extractPageTexts(pdfBase64);
+    const chunks: Chunk[] = chunkPagesWithNumbers(pages.map((p) => p.text));
 
     // Embed all chunks in one batch
     const embeddings = await embedTexts(chunks.map((c) => c.text));
