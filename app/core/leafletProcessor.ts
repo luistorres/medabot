@@ -3,6 +3,7 @@ import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import { openai } from "./llm";
 import { highlightKeyClaim } from "./highlight";
+import { validateSourceQuote } from "./sourceQuote";
 
 export interface Chunk {
   text: string;
@@ -16,6 +17,7 @@ export interface ChunkWithEmbedding extends Chunk {
 const LeafletAnswerSchema = z.object({
   answer: z.string(),
   highlightPhrase: z.string().nullable(),
+  sourceQuote: z.string().nullable(),
 });
 
 // The string pdf-parse uses to join consecutive page texts.
@@ -237,6 +239,7 @@ Instruções importantes:
 7. Use uma linguagem clara e acessível
 8. Organize a resposta de forma estruturada quando apropriado
 9. Para realce visual, escolha opcionalmente uma única expressão curta que já apareça LITERALMENTE na resposta e que responda diretamente à pergunta do paciente, e devolva-a no campo highlightPhrase. Não escreva rótulos como "afirmação-chave" ou "frase-chave", nem explicações sobre o realce, e NÃO use marcação ==...== no texto da resposta. Se não houver uma afirmação-chave única e clara, ou se a resposta for um resumo geral, defina highlightPhrase como null.
+10. No campo sourceQuote, devolva uma ÚNICA frase/trecho VERBATIM copiado EXATAMENTE do "Contexto do folheto" fornecido (não da sua própria resposta) que fundamente diretamente a resposta. Use null se nenhum trecho único fundamentar a resposta ou para resumos gerais. Nunca invente; nunca parafraseie; não inclua o prefixo "[Página X]".
 
 Contrato do campo highlightPhrase: deve ser copiado VERBATIM do texto da resposta, ou null; nunca invente; use null para resumos gerais/visões gerais.`,
         },
@@ -256,9 +259,15 @@ Questão do paciente: ${question}`,
     const answer = parsed
       ? highlightKeyClaim(parsed.answer, parsed.highlightPhrase)
       : "Sem resposta.";
+    const sourceQuote = validateSourceQuote(
+      parsed?.sourceQuote ?? null,
+      relevantChunks,
+    );
 
     return {
       answer,
+      sourceQuote: sourceQuote?.quote ?? null,
+      sourceQuotePage: sourceQuote?.page ?? null,
       sourceDocuments: relevantChunks,
       context: contextWithPages,
       pageNumbers,

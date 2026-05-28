@@ -1,3 +1,5 @@
+import type { PDFHighlightTargets } from "../../context/PDFContext";
+
 // Citation / CitationRow — amber page-reference chips shown below assistant messages.
 // Clicking jumps to that page in the PDF panel AND passes the source passages for
 // that page so the viewer can wash the cited text (consumer supplies onJump).
@@ -10,8 +12,8 @@ export interface CitationSource {
 
 interface CitationProps {
   page: number;
-  onJump: (page: number, highlightTexts?: string[]) => void;
-  highlightTexts?: string[];
+  onJump: (page: number, highlightTexts?: PDFHighlightTargets) => void;
+  highlightTexts?: PDFHighlightTargets;
 }
 
 export function Citation({ page, onJump, highlightTexts }: CitationProps) {
@@ -29,12 +31,20 @@ export function Citation({ page, onJump, highlightTexts }: CitationProps) {
 
 interface CitationRowProps {
   pages: number[];
-  onJump: (page: number, highlightTexts?: string[]) => void;
+  onJump: (page: number, highlightTexts?: PDFHighlightTargets) => void;
   /** Source chunks (text + page) the answer was grounded on, for passage highlighting. */
   sources?: CitationSource[];
+  sourceQuote?: string | null;
+  sourceQuotePage?: number | null;
 }
 
-export function CitationRow({ pages, onJump, sources }: CitationRowProps) {
+export function CitationRow({
+  pages,
+  onJump,
+  sources,
+  sourceQuote,
+  sourceQuotePage,
+}: CitationRowProps) {
   if (!pages || pages.length === 0) return null;
 
   return (
@@ -52,9 +62,13 @@ export function CitationRow({ pages, onJump, sources }: CitationRowProps) {
             key={p}
             page={p}
             onJump={onJump}
-            highlightTexts={sources
-              ?.filter((s) => s.page === p)
-              .map((s) => s.text)}
+            highlightTexts={{
+              primary: sourceQuotePage === p ? (sourceQuote ?? null) : null,
+              fallbacks:
+                sources
+                  ?.filter((s) => s.page === p)
+                  .map((s) => s.text) ?? [],
+            }}
           />
         ))}
       </div>

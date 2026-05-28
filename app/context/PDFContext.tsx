@@ -2,6 +2,11 @@ import { createContext, useContext, useState, useCallback, ReactNode } from "rea
 
 export type TabType = "chat" | "medicine" | "pdf";
 
+export interface PDFHighlightTargets {
+  primary: string | null;
+  fallbacks: string[];
+}
+
 interface PDFContextType {
   currentPage: number;
   totalPages: number;
@@ -10,12 +15,12 @@ interface PDFContextType {
   activeTab: TabType;
   cameFromChat: boolean;
   lastJumpedPage: number | null;
-  /** Source passages to wash on the jumped page (from the clicked citation). */
-  highlightTexts: string[];
+  /** Source passages to wash on the jumped page (quote first, chunks as fallback). */
+  highlightTexts: PDFHighlightTargets;
   setCurrentPage: (page: number) => void;
   setPdfData: (data: string | null) => void;
   setTotalPages: (total: number) => void;
-  jumpToPage: (page: number, highlightTexts?: string[]) => void;
+  jumpToPage: (page: number, highlightTexts?: PDFHighlightTargets) => void;
   setIsPdfViewerOpen: (open: boolean) => void;
   setActiveTab: (tab: TabType) => void;
   setCameFromChat: (value: boolean) => void;
@@ -32,10 +37,13 @@ export const PDFProvider = ({ children }: { children: ReactNode }) => {
   const [activeTab, setActiveTab] = useState<TabType>("chat");
   const [cameFromChat, setCameFromChat] = useState<boolean>(false);
   const [lastJumpedPage, setLastJumpedPage] = useState<number | null>(null);
-  const [highlightTexts, setHighlightTexts] = useState<string[]>([]);
+  const [highlightTexts, setHighlightTexts] = useState<PDFHighlightTargets>({
+    primary: null,
+    fallbacks: [],
+  });
 
   const jumpToPage = useCallback(
-    (page: number, texts: string[] = []) => {
+    (page: number, texts: PDFHighlightTargets = { primary: null, fallbacks: [] }) => {
       setIsPdfViewerOpen(true);
       setActiveTab("pdf");
       setCameFromChat(true);
