@@ -269,7 +269,7 @@ const PDFViewer = ({ onClose, width = 40, isTabMode = false }: PDFViewerProps) =
           onChange={(e) => setPageInput(e.target.value)}
           onBlur={handlePageInputSubmit}
           onKeyDown={(e) => e.key === "Enter" && handlePageInputSubmit()}
-          className="w-12 text-center text-sm border border-border rounded-sm py-1 bg-paper text-ink focus:outline-none focus:ring-1 focus:ring-brand"
+          className="w-12 text-center border border-border rounded-sm py-1 bg-paper text-ink focus:outline-none focus:ring-1 focus:ring-brand"
           min={1}
           max={totalPages}
           autoFocus

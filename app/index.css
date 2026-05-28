@@ -78,6 +78,15 @@
   #root {
     @apply h-full;
   }
+
+  /* iOS Safari auto-zooms into a focused form control whose font-size is below
+     16px, then pans the viewport and clips content off the right edge. Keep
+     every input at the 16px minimum to suppress that zoom-on-focus. */
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
 }
 
 /* Custom utilities */

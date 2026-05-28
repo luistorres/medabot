@@ -91,7 +91,7 @@ const SearchScreen = ({
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSearch()}
             placeholder="Ben-u-ron 500 mg"
-            className="flex-1 text-[15px] text-ink bg-transparent border-none outline-none placeholder:text-muted py-1 min-h-0"
+            className="flex-1 text-ink bg-transparent border-none outline-none placeholder:text-muted py-1 min-h-0"
             autoFocus
             disabled={parsing}
           />
