@@ -533,9 +533,14 @@ const Chat = ({
               <Icon.send className="w-[18px] h-[18px]" />
             </button>
           </div>
-          <p className="mt-2 text-[11px] leading-snug text-muted text-center">
-            O Medabot explica o folheto. Não substitui o seu médico ou farmacêutico.
-          </p>
+          {/* On mobile the pinned disclaimer costs scarce vertical space, so show
+              it on the initial screen (seen once) and drop it after the first
+              question. Desktop keeps it persistent — there's room. */}
+          {(isDesktop || !messages.some((m) => m.type === "user")) && (
+            <p className="mt-2 text-[11px] leading-snug text-muted text-center">
+              O Medabot explica o folheto. Não substitui o seu médico ou farmacêutico.
+            </p>
+          )}
         </div>
       </div>
     </div>
