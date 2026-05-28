@@ -7,6 +7,8 @@ import {
   ChunkWithEmbedding,
 } from "../core/leafletProcessor";
 import { openai } from "../core/llm";
+import { normalizeForMatch } from "../utils/pdfHighlight";
+import { isNotFoundAnswer } from "../utils/isNotFoundAnswer";
 import { createHash } from "crypto";
 
 export interface MedicineSummary {
@@ -15,10 +17,18 @@ export interface MedicineSummary {
   keyWarnings: string[];
 }
 
-const MedicineSummarySchema = z.object({
+// Each warning carries a short verbatim `anchor` copied from the leaflet so the
+// server can confirm it is actually grounded before showing it in the prominent
+// "Importante saber" callout (mirrors the chat path's sourceQuote validation).
+const ExtractionSchema = z.object({
   category: z.string(),
   indications: z.array(z.string()),
-  keyWarnings: z.array(z.string()),
+  keyWarnings: z.array(
+    z.object({
+      text: z.string(),
+      anchor: z.string(),
+    }),
+  ),
 });
 
 // Reuse the same chunk cache shape as the leaflet query path.
@@ -27,6 +37,11 @@ const chunkCache = new Map<string, ChunkWithEmbedding[]>();
 function hashPdf(pdfBase64: string): string {
   return createHash("sha256").update(pdfBase64).digest("hex");
 }
+
+// Negative / not-found phrasing a model may leak into a structured array despite
+// being told to return [] (restores the filtering added in commit 1ad0206).
+const NEGATIVE_WARNING_RE =
+  /^(nenhum|n[ãa]o (consta|consta(m)?|encontro|encontrei|se aplica|aplic|h[áa]))/i;
 
 export function sanitizeMedicineSummary(
   summary: MedicineSummary,
@@ -41,13 +56,47 @@ export function sanitizeMedicineSummary(
   };
 }
 
+/**
+ * Keep only warnings that are grounded in the retrieved leaflet text. A warning
+ * survives when its model-provided `anchor` (a short verbatim snippet) is found
+ * — accent/case-insensitively — in one of the retrieved chunks, and its `text`
+ * is not an empty/negative/not-found phrase. Drops anything ungrounded so a
+ * hallucinated dose/interaction never reaches the UI. Caps at 2.
+ */
+export function groundKeyWarnings(
+  warnings: { text: string; anchor: string }[],
+  chunks: { text: string }[],
+): string[] {
+  const normalizedChunks = chunks.map((c) => normalizeForMatch(c.text));
+  const out: string[] = [];
+
+  for (const w of warnings) {
+    const text = w.text?.trim() ?? "";
+    const anchor = w.anchor?.trim() ?? "";
+    if (!text || !anchor) continue;
+    if (NEGATIVE_WARNING_RE.test(text) || isNotFoundAnswer(text)) continue;
+
+    const normalizedAnchor = normalizeForMatch(anchor);
+    // Too few words to verify reliably — treat as ungrounded.
+    if (normalizedAnchor.split(" ").filter(Boolean).length < 3) continue;
+    if (!normalizedChunks.some((c) => c.includes(normalizedAnchor))) continue;
+
+    out.push(text);
+    if (out.length === 2) break;
+  }
+
+  return out;
+}
+
 function formatContext(chunks: ChunkWithEmbedding[]): string {
   return chunks
     .map((c) => `[Página ${c.page}]\n${c.text}`)
     .join("\n\n---\n\n");
 }
 
-function dedupeChunks(chunks: ChunkWithEmbedding[]): ChunkWithEmbedding[] {
+export function dedupeChunks(
+  chunks: ChunkWithEmbedding[],
+): ChunkWithEmbedding[] {
   const seen = new Set<string>();
   const deduped: ChunkWithEmbedding[] = [];
 
@@ -94,10 +143,7 @@ export const extractMedicineSummary = createServerFn({
       const response = await openai.chat.completions.parse({
         model: "gpt-5.4",
         reasoning_effort: "low",
-        response_format: zodResponseFormat(
-          MedicineSummarySchema,
-          "medicine_summary",
-        ),
+        response_format: zodResponseFormat(ExtractionSchema, "medicine_summary"),
         max_completion_tokens: 2000,
         messages: [
           {
@@ -109,7 +155,7 @@ Devolve apenas dados que constem explicitamente do contexto fornecido. Nunca inv
 Extrai:
 - category: categoria terapêutica em português, curta.
 - indications: lista de frases curtas em português sobre para que serve o medicamento; sem frases completas.
-- keyWarnings: no máximo 2 avisos curtos. Inclui um aviso apenas se constar explicitamente do folheto e for sobre: (a) dose máxima diária recomendada, ou (b) interação importante com álcool ou outros medicamentos. Caso contrário, devolve [].
+- keyWarnings: no máximo 2 avisos. Cada aviso é um objeto { text, anchor }: "text" é o aviso curto em português, apenas sobre (a) dose máxima diária recomendada, ou (b) interação importante com álcool ou outros medicamentos; "anchor" é um trecho VERBATIM curto (poucas palavras) copiado EXATAMENTE do contexto que comprova esse aviso. Inclui um aviso apenas se constar explicitamente do folheto; caso contrário devolve []. Nunca inventes o anchor — tem de aparecer tal e qual no contexto.
 
 Não incluas citações de página, marcadores de realce, nem texto fora do JSON estruturado.`,
           },
@@ -122,14 +168,17 @@ ${contextWithPages}`,
       });
 
       const parsed = response.choices[0]?.message?.parsed;
+      if (!parsed) {
+        console.warn(
+          `extractMedicineSummary: structured parse returned null (finish_reason=${response.choices[0]?.finish_reason})`,
+        );
+      }
 
-      return sanitizeMedicineSummary(
-        parsed ?? {
-          category: "Medicamento",
-          indications: [],
-          keyWarnings: [],
-        },
-      );
+      return sanitizeMedicineSummary({
+        category: parsed?.category ?? "",
+        indications: parsed?.indications ?? [],
+        keyWarnings: groundKeyWarnings(parsed?.keyWarnings ?? [], relevantChunks),
+      });
     } catch (error) {
       console.error("Error extracting medicine summary:", error);
       return {

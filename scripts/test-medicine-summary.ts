@@ -7,7 +7,19 @@
  *   npx tsx scripts/test-medicine-summary.ts
  */
 
-import { sanitizeMedicineSummary } from "../app/server/extractMedicineSummary.js";
+import {
+  sanitizeMedicineSummary,
+  groundKeyWarnings,
+  dedupeChunks,
+} from "../app/server/extractMedicineSummary.js";
+import type { ChunkWithEmbedding } from "../app/core/leafletProcessor.js";
+
+// Minimal chunk factory — dedupeChunks/groundKeyWarnings only read page + text.
+const chunk = (page: number, text: string): ChunkWithEmbedding => ({
+  page,
+  text,
+  embedding: [],
+});
 
 let passed = 0;
 let failed = 0;
@@ -66,6 +78,111 @@ scenario("uses the graceful category fallback after trimming", () => {
       keyWarnings: [],
     },
     "fallback category",
+  );
+});
+
+// ── groundKeyWarnings ───────────────────────────────────────────────────────
+const leaflet = [
+  chunk(2, "Não tome mais de 4 g de paracetamol por dia em adultos."),
+  chunk(3, "Durante o tratamento deve evitar o consumo de álcool."),
+];
+
+scenario("keeps a warning whose anchor is verbatim in a chunk", () => {
+  assertEqual(
+    groundKeyWarnings(
+      [{ text: "Dose máxima: 4 g por dia", anchor: "mais de 4 g de paracetamol" }],
+      leaflet,
+    ),
+    ["Dose máxima: 4 g por dia"],
+    "grounded warning kept",
+  );
+});
+
+scenario("matches the anchor accent/case-insensitively", () => {
+  assertEqual(
+    groundKeyWarnings(
+      [{ text: "Evitar álcool", anchor: "EVITAR O CONSUMO DE ALCOOL" }],
+      leaflet,
+    ),
+    ["Evitar álcool"],
+    "anchor normalized match",
+  );
+});
+
+scenario("drops a warning whose anchor is not in any chunk (hallucination)", () => {
+  assertEqual(
+    groundKeyWarnings(
+      [{ text: "Dose máxima: 8 g por dia", anchor: "ate 8 gramas por dia" }],
+      leaflet,
+    ),
+    [],
+    "ungrounded warning dropped",
+  );
+});
+
+scenario("drops negative / not-found warning text", () => {
+  assertEqual(
+    groundKeyWarnings(
+      [
+        { text: "NENHUM", anchor: "mais de 4 g de paracetamol" },
+        { text: "Não consta no folheto", anchor: "evitar o consumo de álcool" },
+      ],
+      leaflet,
+    ),
+    [],
+    "negative text dropped",
+  );
+});
+
+scenario("drops a too-short (unverifiable) anchor", () => {
+  assertEqual(
+    groundKeyWarnings([{ text: "Cuidado", anchor: "4 g" }], leaflet),
+    [],
+    "short anchor dropped",
+  );
+});
+
+scenario("caps grounded warnings at two", () => {
+  const c = [
+    chunk(1, "aviso um presente no folheto"),
+    chunk(1, "aviso dois presente no folheto"),
+    chunk(1, "aviso tres presente no folheto"),
+  ];
+  assertEqual(
+    groundKeyWarnings(
+      [
+        { text: "Um", anchor: "aviso um presente" },
+        { text: "Dois", anchor: "aviso dois presente" },
+        { text: "Tres", anchor: "aviso tres presente" },
+      ],
+      c,
+    ),
+    ["Um", "Dois"],
+    "capped at two",
+  );
+});
+
+// ── dedupeChunks ────────────────────────────────────────────────────────────
+scenario("collapses identical page+text chunks, preserves order", () => {
+  const result = dedupeChunks([
+    chunk(1, "alpha"),
+    chunk(2, "beta"),
+    chunk(1, "alpha"),
+    chunk(2, "gamma"),
+  ]);
+  assertEqual(
+    result.map((c) => `${c.page}:${c.text}`),
+    ["1:alpha", "2:beta", "2:gamma"],
+    "deduped, order-stable",
+  );
+});
+
+scenario("keeps same text on different pages", () => {
+  const result = dedupeChunks([chunk(1, "same"), chunk(4, "same")]);
+  assertEqual(
+    result.map((c) => `${c.page}:${c.text}`),
+    ["1:same", "4:same"],
+    "distinct pages preserved",
   );
 });
 
