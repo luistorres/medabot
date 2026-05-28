@@ -2,6 +2,7 @@ import pdfParse from "pdf-parse";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import { openai } from "./llm";
+import { highlightKeyClaim } from "./highlight";
 
 export interface Chunk {
   text: string;
@@ -21,71 +22,6 @@ const LeafletAnswerSchema = z.object({
 // pdf-parse sets ret.text = `${ret.text}\n\n${pageText}` for each page,
 // so the full text is "\n\n" + page1 + "\n\n" + page2 + ...
 const PAGE_JOINER = "\n\n";
-
-function stripHighlightLeak(answer: string): string {
-  return answer
-    .split(/\n+/)
-    .filter((line) => {
-      const s = line.trim();
-      return !/^(?:a\s+)?(?:afirma[cç][aã]o|frase|express[aã]o|trecho)[-\s]?chave\s*(?:é|:)/i.test(s)
-        && !/^key claim\s*(?:is|:)/i.test(s);
-    })
-    .join("\n")
-    .replace(/==([^=\n]+)==/g, "$1")
-    .trim();
-}
-
-// Find a **bold** span that fully encloses [start, end), if any. Used to pull
-// the highlight out of bold so formatMessage renders the <mark> (==..== nested
-// inside **..** would otherwise be swallowed by the bold matcher and shown raw).
-function findEnclosingBold(
-  text: string,
-  start: number,
-  end: number,
-): { start: number; end: number; innerStart: number; innerEnd: number } | null {
-  const boldPattern = /\*\*([\s\S]+?)\*\*/g;
-  let m: RegExpExecArray | null;
-  while ((m = boldPattern.exec(text)) !== null) {
-    const innerStart = m.index + 2;
-    const innerEnd = m.index + m[0].length - 2;
-    if (start >= innerStart && end <= innerEnd) {
-      return { start: m.index, end: m.index + m[0].length, innerStart, innerEnd };
-    }
-  }
-  return null;
-}
-
-function applySingleHighlight(answer: string, phrase: string | null): string {
-  const clean = stripHighlightLeak(answer);
-  const p = phrase?.trim().replace(/==/g, "") ?? "";
-  if (!p || p.length > 90 || p.split(/\s+/).length > 14) return clean;
-  const first = clean.indexOf(p);
-  if (first === -1) return clean;
-  const second = clean.indexOf(p, first + p.length);
-  if (second !== -1) return clean; // ambiguous; prefer no highlight
-  const end = first + p.length;
-
-  const bold = findEnclosingBold(clean, first, end);
-  if (!bold) {
-    return clean.slice(0, first) + `==${p}==` + clean.slice(end);
-  }
-
-  // Phrase sits inside a **bold** span — rebuild as **pre** ==phrase== **post**,
-  // dropping empty bold remnants and preserving the original spacing.
-  const pre = clean.slice(bold.innerStart, first);
-  const post = clean.slice(end, bold.innerEnd);
-  const preBold = pre.replace(/\s+$/, "");
-  const preSpace = pre.slice(preBold.length);
-  const postBold = post.replace(/^\s+/, "");
-  const postSpace = post.slice(0, post.length - postBold.length);
-  const rebuilt =
-    (preBold ? `**${preBold}**` : "") +
-    preSpace +
-    `==${p}==` +
-    postSpace +
-    (postBold ? `**${postBold}**` : "");
-  return clean.slice(0, bold.start) + rebuilt + clean.slice(bold.end);
-}
 
 /**
  * Pure helper: chunk each page's text separately (paragraph-aware, 800/150),
@@ -318,7 +254,7 @@ Questão do paciente: ${question}`,
 
     const parsed = response.choices[0]?.message?.parsed;
     const answer = parsed
-      ? applySingleHighlight(parsed.answer, parsed.highlightPhrase)
+      ? highlightKeyClaim(parsed.answer, parsed.highlightPhrase)
       : "Sem resposta.";
 
     return {
