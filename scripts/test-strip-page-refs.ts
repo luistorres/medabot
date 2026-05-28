@@ -56,6 +56,16 @@ scenario("removes sentence-initial 'Na página' form", () => {
 scenario("removes 'A página N indica que' subject form", () => {
   eq(stripInlinePageRefs("A página 3 indica que deve evitar álcool."), "Deve evitar álcool.", "leading-subject");
 });
+scenario("does not mangle a decimal section ref into '.3' (regression)", () => {
+  // Model wrote "Fala na secção 4.3, ..." — previously TRAILING_RE stripped
+  // "na secção 4" (the "." of 4.3 satisfied its lookahead), leaving "Fala.3".
+  // Decimal-aware REF_NUM no longer matches the integer alone, so coherent text stays.
+  eq(
+    stripInlinePageRefs("Fala na secção 4.3, «Contraindicações»."),
+    "Fala na secção 4.3, «Contraindicações».",
+    "no mangle",
+  );
+});
 
 console.log(`\nRESULTS: ${passed} passed, ${failed} failed`);
 if (failures.length) { failures.forEach((f) => console.log(`  - ${f}`)); process.exit(1); }

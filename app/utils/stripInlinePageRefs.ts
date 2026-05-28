@@ -7,7 +7,9 @@
  */
 // A page-reference "noun": página(s)/pág./p., plus folha, secção, and English page.
 const REF_NOUN = String.raw`(?:p(?:[áa]g(?:inas?)?)?\.?|folhas?|sec[çc][ãa]o|se[çc][ãa]o|pages?)`;
-const REF_NUM = String.raw`\d+(?:\s*(?:[-–—]|e|a)\s*\d+)?`;
+// Consume decimals (e.g. "secção 4.3") so a trailing-clause matcher can't strip
+// only the integer part ("secção 4") and leave a mangled ".3" behind.
+const REF_NUM = String.raw`\d+(?:[.,]\d+)?(?:\s*(?:[-–—]|e|a)\s*\d+(?:[.,]\d+)?)?`;
 
 const PAREN_RE = new RegExp(
   String.raw`\s*\((?:ver\s+|consulte\s+|consultar\s+)?${REF_NOUN}\s*${REF_NUM}\s*\)`,
@@ -34,8 +36,10 @@ const LEADING_SUBJECT_RE = new RegExp(
   "gi",
 );
 // Trailing refs at end of a clause/sentence: "..., na página 3." / "... das páginas 3-4"
+// The "." terminator must NOT be followed by a digit, otherwise REF_NUM backtracks
+// to the integer of a decimal (e.g. "secção 4.3" → strips "secção 4", leaves ".3").
 const TRAILING_RE = new RegExp(
-  String.raw`[,;]?\s+(?:na|da|no|nas|das|nos|à|às)?\s*${REF_NOUN}\s+${REF_NUM}(?=[.!?)\]]|$)`,
+  String.raw`[,;]?\s+(?:na|da|no|nas|das|nos|à|às)?\s*${REF_NOUN}\s+${REF_NUM}(?=[!?)\]]|$|\.(?!\d))`,
   "gi",
 );
 
