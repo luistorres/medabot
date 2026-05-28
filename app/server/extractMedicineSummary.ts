@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { processLeaflet, queryLeaflet, ChunkWithEmbedding } from "../core/leafletProcessor";
+import { isNotFoundAnswer } from "../utils/isNotFoundAnswer";
 import { createHash } from "crypto";
 
 export interface MedicineSummary {
@@ -9,7 +10,8 @@ export interface MedicineSummary {
   keyWarnings: string[];
 }
 
-// Reuse the same chunk cache from queryLeaflet
+// Module-local cache of processed chunks, keyed by PDF hash (mirrors the one in
+// queryLeaflet so a leaflet is only chunked + embedded once per server process).
 const chunkCache = new Map<string, ChunkWithEmbedding[]>();
 
 function hashPdf(pdfBase64: string): string {
@@ -79,13 +81,21 @@ Inclui um aviso APENAS se estiver explicitamente no folheto. Responde SÓ com li
         }
       }
 
-      // Parse warnings: list lines only. "NENHUM" / non-bullet prose → no warnings.
+      // Parse warnings: list lines only, then drop empties, placeholders, and
+      // "NENHUM"/not-found lines (even if the model bulletized them). Cap at 2.
       const keyWarnings: string[] = warningsResult.answer
         .split("\n")
         .map((l: string) => l.trim())
         .filter((l: string) => l.startsWith("- ") || l.startsWith("• "))
         .map((l: string) => stripMarks(l.replace(/^[-•]\s*/, "")))
-        .filter((l: string) => l && !/^<.*>$/.test(l));
+        .filter(
+          (l: string) =>
+            l &&
+            !/^<.*>$/.test(l) &&
+            !/^nenhum\b/i.test(l) &&
+            !isNotFoundAnswer(l)
+        )
+        .slice(0, 2);
 
       return {
         category: category || "Medicamento",
