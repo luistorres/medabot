@@ -34,7 +34,6 @@ const ResponsiveContainer = ({
       medicineInfoPanel={medicineInfoPanel}
       chat={chat}
       showPdfViewer={showPdfViewer}
-      onReset={onReset}
     />
   );
 };

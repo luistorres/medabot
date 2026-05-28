@@ -15,6 +15,7 @@ interface DisambiguationCardProps {
   candidates: Candidate[];
   onSelect: (candidate: Candidate) => void;
   onNoneMatch: () => void;
+  onBack?: () => void;
 }
 
 interface CandidateCardProps {
@@ -89,6 +90,7 @@ const DisambiguationCard = ({
   candidates,
   onSelect,
   onNoneMatch,
+  onBack,
 }: DisambiguationCardProps) => {
   // Sort by similarity descending — highest match first
   const sorted = [...candidates].sort((a, b) => b.similarity - a.similarity);
@@ -98,6 +100,15 @@ const DisambiguationCard = ({
     <div className="flex flex-col min-h-0 bg-bg">
       {/* Header */}
       <div className="flex items-center justify-center px-5 py-3 border-b border-rule relative">
+        {onBack && (
+          <button
+            onClick={onBack}
+            aria-label="Início"
+            className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center justify-center min-w-[40px] min-h-[40px] text-ink-2 hover:text-ink transition-colors"
+          >
+            <Icon.back className="w-[18px] h-[18px]" />
+          </button>
+        )}
         <Wordmark size={18} />
       </div>
 
