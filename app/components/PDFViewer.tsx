@@ -68,7 +68,13 @@ const PDFViewer = ({ onClose, width = 40, isTabMode = false }: PDFViewerProps) =
     if (lastJumpedPage === null || currentPage !== lastJumpedPage) {
       return new Set<number>();
     }
-    return computeHighlightItemIndices(pageTextItems, highlightTexts);
+    if (highlightTexts.primary) {
+      const primary = computeHighlightItemIndices(pageTextItems, [
+        highlightTexts.primary,
+      ]);
+      if (primary.size > 0) return primary;
+    }
+    return computeHighlightItemIndices(pageTextItems, highlightTexts.fallbacks);
   }, [pageTextItems, highlightTexts, currentPage, lastJumpedPage]);
 
   const customTextRenderer = useCallback(

@@ -3,6 +3,7 @@ import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import { openai } from "./llm";
 import { highlightKeyClaim } from "./highlight";
+import { resolveSourceQuote } from "./sourceQuote";
 
 export interface Chunk {
   text: string;
@@ -16,6 +17,8 @@ export interface ChunkWithEmbedding extends Chunk {
 const LeafletAnswerSchema = z.object({
   answer: z.string(),
   highlightPhrase: z.string().nullable(),
+  quoteStart: z.string().nullable(),
+  quoteEnd: z.string().nullable(),
 });
 
 // The string pdf-parse uses to join consecutive page texts.
@@ -237,6 +240,7 @@ Instruções importantes:
 7. Use uma linguagem clara e acessível
 8. Organize a resposta de forma estruturada quando apropriado
 9. Para realce visual, escolha opcionalmente uma única expressão curta que já apareça LITERALMENTE na resposta e que responda diretamente à pergunta do paciente, e devolva-a no campo highlightPhrase. Não escreva rótulos como "afirmação-chave" ou "frase-chave", nem explicações sobre o realce, e NÃO use marcação ==...== no texto da resposta. Se não houver uma afirmação-chave única e clara, ou se a resposta for um resumo geral, defina highlightPhrase como null.
+10. Para localizar no folheto a frase/trecho que fundamenta a resposta, devolva DOIS marcadores curtos, copiados VERBATIM do "Contexto do folheto" (não da sua própria resposta): quoteStart = as primeiras ~5 a 6 palavras desse trecho; quoteEnd = as últimas ~5 a 6 palavras do MESMO trecho. Não copie o trecho inteiro. Ambos devem pertencer à mesma frase/trecho contíguo. Nunca invente nem parafraseie; não inclua o prefixo "[Página X]". Use null em ambos os campos se nenhum trecho único fundamentar a resposta ou para resumos gerais.
 
 Contrato do campo highlightPhrase: deve ser copiado VERBATIM do texto da resposta, ou null; nunca invente; use null para resumos gerais/visões gerais.`,
         },
@@ -256,9 +260,16 @@ Questão do paciente: ${question}`,
     const answer = parsed
       ? highlightKeyClaim(parsed.answer, parsed.highlightPhrase)
       : "Sem resposta.";
+    const sourceQuote = resolveSourceQuote(
+      parsed?.quoteStart ?? null,
+      parsed?.quoteEnd ?? null,
+      relevantChunks,
+    );
 
     return {
       answer,
+      sourceQuote: sourceQuote?.quote ?? null,
+      sourceQuotePage: sourceQuote?.page ?? null,
       sourceDocuments: relevantChunks,
       context: contextWithPages,
       pageNumbers,
