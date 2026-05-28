@@ -6,6 +6,7 @@ import {
   assembleLeafletContext,
   validateCitedPages,
   pageParagraphs,
+  selectFallbackParagraphs,
 } from "../app/core/leafletStore.js";
 
 let passed = 0, failed = 0;
@@ -67,6 +68,21 @@ scenario("pageParagraphs splits and drops <3-word fragments", () => {
     pageParagraphs("uma duas tres\nok\n\nquatro cinco seis sete"),
     ["uma duas tres", "quatro cinco seis sete"],
     "≥3-word paragraphs only",
+  );
+});
+
+scenario("selectFallbackParagraphs targets the quote paragraph and caps output", () => {
+  const pageText =
+    "Parágrafo um sem relação aqui.\nNão tome mais de seis comprimidos por dia.\nOutro parágrafo distinto.";
+  assertEqual(
+    selectFallbackParagraphs(pageText, "Não tome mais de seis comprimidos por dia"),
+    ["Não tome mais de seis comprimidos por dia."],
+    "returns only the overlapping paragraph",
+  );
+  assertEqual(
+    selectFallbackParagraphs(pageText, null).length <= 3,
+    true,
+    "caps when no quote",
   );
 });
 

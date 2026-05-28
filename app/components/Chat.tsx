@@ -166,19 +166,27 @@ const Chat = ({
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    setMessages((prev) => {
+      let base = prev;
+      const last = prev[prev.length - 1];
+      if (last?.type === "error" && last.retryQuestion === text) {
+        base = prev.slice(0, -1); // drop the stale error bubble
+        if (base[base.length - 1]?.type === "user" && base[base.length - 1].content === text) {
+          base = base.slice(0, -1); // drop the failed user bubble it retried
+        }
+      }
+      return [...base, userMessage];
+    });
     setQuestion("");
     setLoading(true);
 
     try {
       const history = messages
-        .filter((m) => m.type === "user" || m.type === "assistant")
+        .filter((m) => (m.type === "user" || m.type === "assistant") && !m.isOverview)
         .map((m) => ({
           role: m.type === "user" ? ("user" as const) : ("assistant" as const),
           content: m.content.replace(/==/g, ""),
         }));
-      // On retry, the failed question is still the trailing user turn (its error bubble
-      // was filtered out). Drop it so it isn't duplicated with the `question` arg below.
       if (history.length > 0 && history[history.length - 1].role === "user") history.pop();
 
       const result = await queryLeafletPdf({

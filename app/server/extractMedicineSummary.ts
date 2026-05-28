@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import { openai } from "../core/llm";
-import { getLeafletDoc, assembleLeafletContext } from "../core/leafletStore";
+import { getLeafletDoc, assembleLeafletContext, leafletCacheKey } from "../core/leafletStore";
 import { normalizeForMatch } from "../utils/pdfHighlight";
 import { isNotFoundAnswer } from "../utils/isNotFoundAnswer";
 
@@ -97,6 +97,7 @@ export const extractMedicineSummary = createServerFn({
         reasoning_effort: "low",
         response_format: zodResponseFormat(ExtractionSchema, "medicine_summary"),
         max_completion_tokens: 2000,
+        prompt_cache_key: leafletCacheKey(pdfBase64),
         messages: [
           {
             role: "system",

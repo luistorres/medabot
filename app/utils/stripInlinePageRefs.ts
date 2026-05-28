@@ -23,6 +23,16 @@ const LEADING_RE = new RegExp(
   String.raw`(^|[.!?]\s+)(?:de acordo com|conforme(?:\s+indicado)?|segundo|tal como(?:\s+indicado)?|consulte|consultar|ver|veja)\s+(?:a|na|no|nas|em|à)?\s*${REF_NOUN}\s+${REF_NUM}[,:]?\s*`,
   "gi",
 );
+// Sentence-initial bare prepositional ref: "Na página 3, ..." / "Nas páginas 3 e 4, ..."
+const LEADING_BARE_RE = new RegExp(
+  String.raw`(^|[.!?]\s+)(?:na|no|nas|nos|da|do|das|dos|à|às|em)\s+${REF_NOUN}\s+${REF_NUM}[,:]?\s*`,
+  "gi",
+);
+// Sentence-initial subject ref: "A página 3 indica que ..." / "A secção 2 refere ..."
+const LEADING_SUBJECT_RE = new RegExp(
+  String.raw`(^|[.!?]\s+)(?:a|as|o|os)\s+${REF_NOUN}\s+${REF_NUM}\s+(?:indica|refere|diz|menciona|explica|descreve|recomenda|aconselha|informa)(?:\s+que)?\s*`,
+  "gi",
+);
 // Trailing refs at end of a clause/sentence: "..., na página 3." / "... das páginas 3-4"
 const TRAILING_RE = new RegExp(
   String.raw`[,;]?\s+(?:na|da|no|nas|das|nos|à|às)?\s*${REF_NOUN}\s+${REF_NUM}(?=[.!?)\]]|$)`,
@@ -34,6 +44,8 @@ export function stripInlinePageRefs(text: string): string {
     .replace(PAREN_RE, "")
     .replace(COMMA_WRAPPED_RE, " ") // collapse "..., <ref>, ..." -> single space, cleaned below
     .replace(LEADING_RE, "$1")
+    .replace(LEADING_BARE_RE, "$1")
+    .replace(LEADING_SUBJECT_RE, "$1")
     .replace(TRAILING_RE, "")
     .replace(/\s{2,}/g, " ")
     .replace(/\s+([.!?,;])/g, "$1")

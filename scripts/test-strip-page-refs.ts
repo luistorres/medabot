@@ -50,6 +50,12 @@ scenario("removes 'folha' and 'secção' variants", () => {
 scenario("removes English 'page' variant", () => {
   eq(stripInlinePageRefs("See the dose (page 3)."), "See the dose.", "english page");
 });
+scenario("removes sentence-initial 'Na página' form", () => {
+  eq(stripInlinePageRefs("Na página 3, não exceda 6 comprimidos."), "Não exceda 6 comprimidos.", "leading-bare");
+});
+scenario("removes 'A página N indica que' subject form", () => {
+  eq(stripInlinePageRefs("A página 3 indica que deve evitar álcool."), "Deve evitar álcool.", "leading-subject");
+});
 
 console.log(`\nRESULTS: ${passed} passed, ${failed} failed`);
 if (failures.length) { failures.forEach((f) => console.log(`  - ${f}`)); process.exit(1); }

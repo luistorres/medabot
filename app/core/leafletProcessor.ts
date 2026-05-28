@@ -8,7 +8,7 @@ import {
   LeafletDoc,
   assembleLeafletContext,
   validateCitedPages,
-  pageParagraphs,
+  selectFallbackParagraphs,
 } from "./leafletStore";
 import { stripInlinePageRefs } from "../utils/stripInlinePageRefs";
 
@@ -27,13 +27,14 @@ const MAX_TURN_CHARS = 4000;
  * unbounded token growth.
  */
 export function sanitizeHistory(history: ChatTurn[] | undefined | null): ChatTurn[] {
-  return (Array.isArray(history) ? history : [])
+  const arr = Array.isArray(history) ? history : [];
+  return arr
+    .slice(-MAX_HISTORY_TURNS)
     .filter(
       (t): t is ChatTurn =>
         !!t && (t.role === "user" || t.role === "assistant") && typeof t.content === "string",
     )
-    .map((t) => ({ role: t.role, content: t.content.replace(/==/g, "").slice(0, MAX_TURN_CHARS) }))
-    .slice(-MAX_HISTORY_TURNS);
+    .map((t) => ({ role: t.role, content: t.content.slice(0, MAX_TURN_CHARS).replace(/==/g, "") }));
 }
 
 const LeafletAnswerSchema = z.object({
@@ -77,12 +78,18 @@ export async function queryLeaflet(
   try {
     const context = assembleLeafletContext(doc.pages);
     const safeHistory = sanitizeHistory(history);
+    const safeName =
+      (medicineName || "")
+        .replace(/[\r\n]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 80) || "este medicamento";
 
     const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       { role: "system", content: CHAT_SYSTEM_PROMPT },
       {
         role: "system",
-        content: `Folheto informativo de ${medicineName || "este medicamento"}:\n\n${context}`,
+        content: `Folheto informativo de ${safeName}:\n\n${context}`,
       },
       ...safeHistory.map((t) => ({ role: t.role, content: t.content })),
       { role: "user", content: question },
@@ -117,11 +124,21 @@ export async function queryLeaflet(
 
     const pageNumbers = validateCitedPages(parsed.citedPages, doc.totalPages, sourceQuote?.page ?? null);
 
-    // Fallback wash targets for the PDF viewer: paragraphs of the cited pages.
-    const sources = pageNumbers.flatMap((p) => {
-      const page = doc.pages.find((pg) => pg.page === p);
-      return page ? pageParagraphs(page.text).map((text) => ({ page: p, text })) : [];
-    });
+    // Bounded, targeted fallback wash: only the grounded (quote) page's paragraph(s)
+    // overlapping the resolved quote. Other cited pages navigate without a wash —
+    // honest, since we only verified a passage on the quote page.
+    const sources =
+      sourceQuote?.page != null
+        ? (() => {
+            const page = doc.pages.find((pg) => pg.page === sourceQuote.page);
+            return page
+              ? selectFallbackParagraphs(page.text, sourceQuote.quote).map((text) => ({
+                  page: sourceQuote.page as number,
+                  text,
+                }))
+              : [];
+          })()
+        : [];
 
     return {
       answer,

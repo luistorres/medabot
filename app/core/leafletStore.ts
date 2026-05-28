@@ -1,5 +1,6 @@
 import pdfParse from "pdf-parse";
 import { createHash } from "crypto";
+import { normalizeForMatch } from "../utils/pdfHighlight";
 
 export interface PageText {
   page: number;
@@ -129,6 +130,26 @@ export function pageParagraphs(text: string): string[] {
     .split(/\n{2,}|\n/)
     .map((s) => s.trim())
     .filter((s) => s.split(/\s+/).filter(Boolean).length >= 3);
+}
+
+/**
+ * Bounded fallback-wash targets: paragraphs of a page that overlap the resolved
+ * quote (so the PDF viewer washes the cited passage, not the whole page). Falls
+ * back to the first few paragraphs when none overlap, and is always capped.
+ */
+export function selectFallbackParagraphs(
+  pageText: string,
+  quote: string | null,
+  max = 3,
+): string[] {
+  const paras = pageParagraphs(pageText);
+  if (!quote) return paras.slice(0, max);
+  const nq = normalizeForMatch(quote);
+  const overlapping = paras.filter((p) => {
+    const np = normalizeForMatch(p);
+    return np.length > 0 && (nq.includes(np) || np.includes(nq));
+  });
+  return (overlapping.length ? overlapping : paras.slice(0, max)).slice(0, max);
 }
 
 // Module-level cache: PDF hash → parsed page-doc. Replaces the two duplicate
