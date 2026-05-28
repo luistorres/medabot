@@ -94,6 +94,23 @@ async function embedTexts(texts: string[]): Promise<number[][]> {
   return resp.data.map((d) => d.embedding);
 }
 
+export async function retrieveRelevantChunks(
+  chunks: ChunkWithEmbedding[],
+  question: string,
+  k = 6,
+): Promise<ChunkWithEmbedding[]> {
+  const [questionEmbedding] = await embedTexts([question]);
+
+  return chunks
+    .map((chunk) => ({
+      chunk,
+      score: cosineSimilarity(questionEmbedding, chunk.embedding),
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, k)
+    .map((s) => s.chunk);
+}
+
 // Process PDF: extract text, chunk per-page, embed
 export async function processLeaflet(pdfBase64: string) {
   try {
@@ -193,18 +210,7 @@ export async function queryLeaflet(
   question: string,
 ) {
   try {
-    // Embed the question
-    const [questionEmbedding] = await embedTexts([question]);
-
-    // Top-k cosine similarity search
-    const relevantChunks = chunks
-      .map((chunk) => ({
-        chunk,
-        score: cosineSimilarity(questionEmbedding, chunk.embedding),
-      }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 6)
-      .map((s) => s.chunk);
+    const relevantChunks = await retrieveRelevantChunks(chunks, question);
 
     // Format context with page numbers for citations
     const contextWithPages = relevantChunks

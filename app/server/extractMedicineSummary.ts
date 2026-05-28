@@ -1,28 +1,64 @@
 import { createServerFn } from "@tanstack/react-start";
-import { processLeaflet, queryLeaflet, ChunkWithEmbedding } from "../core/leafletProcessor";
-import { isNotFoundAnswer } from "../utils/isNotFoundAnswer";
+import { zodResponseFormat } from "openai/helpers/zod";
+import { z } from "zod";
+import {
+  processLeaflet,
+  retrieveRelevantChunks,
+  ChunkWithEmbedding,
+} from "../core/leafletProcessor";
+import { openai } from "../core/llm";
 import { createHash } from "crypto";
 
 export interface MedicineSummary {
   category: string;
   indications: string[];
-  /** Short key safety warnings (e.g. max dose, alcohol/interaction) when stated in the leaflet. */
   keyWarnings: string[];
 }
 
-// Module-local cache of processed chunks, keyed by PDF hash (mirrors the one in
-// queryLeaflet so a leaflet is only chunked + embedded once per server process).
+const MedicineSummarySchema = z.object({
+  category: z.string(),
+  indications: z.array(z.string()),
+  keyWarnings: z.array(z.string()),
+});
+
+// Reuse the same chunk cache shape as the leaflet query path.
 const chunkCache = new Map<string, ChunkWithEmbedding[]>();
 
 function hashPdf(pdfBase64: string): string {
   return createHash("sha256").update(pdfBase64).digest("hex");
 }
 
-// The shared queryLeaflet system prompt wraps a key phrase in ==...== for the
-// chat highlight renderer. Those markers are meaningless in structured summary
-// fields, so strip them here.
-function stripMarks(s: string): string {
-  return s.replace(/==/g, "").trim();
+export function sanitizeMedicineSummary(
+  summary: MedicineSummary,
+): MedicineSummary {
+  return {
+    category: summary.category.trim() || "Medicamento",
+    indications: summary.indications.map((s) => s.trim()).filter(Boolean),
+    keyWarnings: summary.keyWarnings
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 2),
+  };
+}
+
+function formatContext(chunks: ChunkWithEmbedding[]): string {
+  return chunks
+    .map((c) => `[Página ${c.page}]\n${c.text}`)
+    .join("\n\n---\n\n");
+}
+
+function dedupeChunks(chunks: ChunkWithEmbedding[]): ChunkWithEmbedding[] {
+  const seen = new Set<string>();
+  const deduped: ChunkWithEmbedding[] = [];
+
+  for (const chunk of chunks) {
+    const key = `${chunk.page}:${chunk.text}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(chunk);
+  }
+
+  return deduped;
 }
 
 export const extractMedicineSummary = createServerFn({
@@ -40,68 +76,60 @@ export const extractMedicineSummary = createServerFn({
         chunkCache.set(pdfHash, chunks);
       }
 
-      // Two focused queries in parallel. The category/indications query is left
-      // exactly as it was (proven reliable); warnings get their own query so the
-      // broader ask can't degrade category/indication retrieval.
-      const [summaryResult, warningsResult] = await Promise.all([
-        queryLeaflet(
+      const [identityChunks, safetyChunks] = await Promise.all([
+        retrieveRelevantChunks(
           chunks,
-          `From this medicine leaflet, extract:
-1. The therapeutic category in Portuguese (e.g. "Analgésico e antipirético", "Antibiótico", "Anti-inflamatório não esteroide"). Just the category, no explanation.
-2. A list of indications (what the medicine is used to treat). Each indication should be a short phrase in Portuguese, no full sentences.
-
-Reply ONLY in this exact format, nothing else:
-CATEGORIA: <category>
-- <indication 1>
-- <indication 2>
-- <indication 3>`
+          "categoria terapêutica, indicações, para que é utilizado este medicamento",
+          6,
         ),
-        queryLeaflet(
+        retrieveRelevantChunks(
           chunks,
-          `Deste folheto informativo, indica até 2 avisos de segurança curtos e importantes para o doente, em português, cada um numa frase curta:
-(a) a dose máxima (diária) recomendada;
-(b) uma interação importante com álcool ou com outros medicamentos.
-Inclui um aviso APENAS se estiver explicitamente no folheto. Responde SÓ com linhas de lista (uma por aviso) e mais nada. Se nenhum destes avisos constar do folheto, responde apenas: NENHUM`
+          "dose máxima diária recomendada, interações importantes com álcool ou outros medicamentos",
+          6,
         ),
       ]);
+      const relevantChunks = dedupeChunks([...identityChunks, ...safetyChunks]);
+      const contextWithPages = formatContext(relevantChunks);
 
-      // Parse category + indications (original header-less bullet format).
-      const lines = summaryResult.answer
-        .split("\n")
-        .map((l: string) => l.trim())
-        .filter(Boolean);
+      const response = await openai.chat.completions.parse({
+        model: "gpt-5.4",
+        reasoning_effort: "low",
+        response_format: zodResponseFormat(
+          MedicineSummarySchema,
+          "medicine_summary",
+        ),
+        max_completion_tokens: 2000,
+        messages: [
+          {
+            role: "system",
+            content: `És um extrator de dados de folhetos informativos de medicamentos.
 
-      let category = "";
-      const indications: string[] = [];
-      for (const line of lines) {
-        if (line.toUpperCase().startsWith("CATEGORIA:")) {
-          category = stripMarks(line.replace(/^CATEGORIA:\s*/i, ""));
-        } else if (line.startsWith("- ") || line.startsWith("• ")) {
-          indications.push(stripMarks(line.replace(/^[-•]\s*/, "")));
-        }
-      }
+Devolve apenas dados que constem explicitamente do contexto fornecido. Nunca inventes nem completes com conhecimento externo.
 
-      // Parse warnings: list lines only, then drop empties, placeholders, and
-      // "NENHUM"/not-found lines (even if the model bulletized them). Cap at 2.
-      const keyWarnings: string[] = warningsResult.answer
-        .split("\n")
-        .map((l: string) => l.trim())
-        .filter((l: string) => l.startsWith("- ") || l.startsWith("• "))
-        .map((l: string) => stripMarks(l.replace(/^[-•]\s*/, "")))
-        .filter(
-          (l: string) =>
-            l &&
-            !/^<.*>$/.test(l) &&
-            !/^nenhum\b/i.test(l) &&
-            !isNotFoundAnswer(l)
-        )
-        .slice(0, 2);
+Extrai:
+- category: categoria terapêutica em português, curta.
+- indications: lista de frases curtas em português sobre para que serve o medicamento; sem frases completas.
+- keyWarnings: no máximo 2 avisos curtos. Inclui um aviso apenas se constar explicitamente do folheto e for sobre: (a) dose máxima diária recomendada, ou (b) interação importante com álcool ou outros medicamentos. Caso contrário, devolve [].
 
-      return {
-        category: category || "Medicamento",
-        indications,
-        keyWarnings,
-      };
+Não incluas citações de página, marcadores de realce, nem texto fora do JSON estruturado.`,
+          },
+          {
+            role: "user",
+            content: `Contexto do folheto:
+${contextWithPages}`,
+          },
+        ],
+      });
+
+      const parsed = response.choices[0]?.message?.parsed;
+
+      return sanitizeMedicineSummary(
+        parsed ?? {
+          category: "Medicamento",
+          indications: [],
+          keyWarnings: [],
+        },
+      );
     } catch (error) {
       console.error("Error extracting medicine summary:", error);
       return {
