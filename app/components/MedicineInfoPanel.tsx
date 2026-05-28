@@ -1,7 +1,6 @@
 import { IdentifyMedicineResponse } from "../core/identify";
 import { usePDF } from "../context/PDFContext";
 import type { MedicineSummary } from "../server/extractMedicineSummary";
-import { isNotFoundAnswer } from "../utils/isNotFoundAnswer";
 import Button from "./ui/Button";
 import { Wordmark } from "./ui/Wordmark";
 import { Icon } from "./ui/Icon";
@@ -16,38 +15,6 @@ interface MedicineInfoPanelProps {
   onReset: () => void;
   onDownloadPdf: () => void;
   onForceRefresh: () => void;
-  overview?: string;
-}
-
-const IMPORTANTE_KEYWORDS = [
-  "dose",
-  "máxim",
-  "maxim",
-  "álcool",
-  "alcool",
-  "interaç",
-  "interac",
-];
-
-function extractImportanteSentences(text: string): string {
-  // Split on ". " or newlines to get sentences
-  const raw = text.split(/\.\s+|\n+/);
-  const lower = text.toLowerCase();
-  // Quick guard — if none of the keywords appear anywhere, skip the expensive loop
-  const hasAny = IMPORTANTE_KEYWORDS.some((kw) => lower.includes(kw));
-  if (!hasAny) return "";
-
-  const matched: string[] = [];
-  for (const sentence of raw) {
-    const s = sentence.trim();
-    if (!s) continue;
-    const sl = s.toLowerCase();
-    if (IMPORTANTE_KEYWORDS.some((kw) => sl.includes(kw))) {
-      matched.push(s);
-      if (matched.length >= 2) break;
-    }
-  }
-  return matched.join(". ");
 }
 
 const MedicineInfoPanel = ({
@@ -58,7 +25,6 @@ const MedicineInfoPanel = ({
   onReset,
   onDownloadPdf,
   onForceRefresh,
-  overview,
 }: MedicineInfoPanelProps) => {
   const { setIsPdfViewerOpen, setActiveTab } = usePDF();
 
@@ -81,13 +47,10 @@ const MedicineInfoPanel = ({
     Boolean(item.value)
   );
 
-  // Importante saber callout — only when overview present, not a "not found" answer,
-  // and at least one sentence matches a safety keyword
-  const importanteText =
-    overview && !isNotFoundAnswer(overview)
-      ? extractImportanteSentences(overview)
-      : "";
-  const showImportante = importanteText.length > 0;
+  // Importante saber callout — driven by structured key warnings extracted
+  // from the leaflet (max dose, alcohol/interactions). Omitted when none exist.
+  const keyWarnings = summary?.keyWarnings ?? [];
+  const showImportante = keyWarnings.length > 0;
 
   return (
     <div className="bg-bg h-full flex flex-col">
@@ -195,16 +158,18 @@ const MedicineInfoPanel = ({
               <p className="text-[11px] uppercase tracking-widest text-accent-ink font-medium mb-2">
                 Importante saber
               </p>
-              <p className="text-[13.5px] leading-[1.5] text-accent-ink">
-                {importanteText}.{" "}
-                <Button
-                  variant="link"
-                  onClick={handleViewPdf}
-                  className="text-[13.5px] text-accent-ink underline decoration-accent-ink/40 hover:decoration-accent-ink"
-                >
-                  Ver mais no folheto →
-                </Button>
-              </p>
+              <div className="text-[13.5px] leading-[1.5] text-accent-ink space-y-1">
+                {keyWarnings.map((warning, i) => (
+                  <p key={i}>{warning}</p>
+                ))}
+              </div>
+              <Button
+                variant="link"
+                onClick={handleViewPdf}
+                className="mt-1.5 text-[13.5px] text-accent-ink underline decoration-accent-ink/40 hover:decoration-accent-ink"
+              >
+                Ver mais no folheto →
+              </Button>
             </div>
           </div>
         )}

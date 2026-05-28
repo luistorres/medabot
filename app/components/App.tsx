@@ -455,7 +455,6 @@ function AppContent() {
           onReset={handleReset}
           onDownloadPdf={downloadPdf}
           onForceRefresh={handleForceRefresh}
-          overview={overview}
         />
       }
       chat={
