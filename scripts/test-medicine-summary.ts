@@ -10,6 +10,7 @@
 import {
   sanitizeMedicineSummary,
   groundKeyWarnings,
+  stripIndicationStem,
 } from "../app/server/extractMedicineSummary.js";
 
 // groundKeyWarnings only reads page + text.
@@ -52,10 +53,48 @@ scenario("trims fields, drops empty array entries, and caps warnings at two", ()
     }),
     {
       category: "Analgésico e antipirético",
-      indications: ["dor", "febre"],
+      // indications are capitalized by stripIndicationStem (display normalization).
+      indications: ["Dor", "Febre"],
       keyWarnings: ["máximo 4 g por dia", "evitar álcool"],
     },
     "sanitized summary",
+  );
+});
+
+scenario("strips the redundant 'Alívio/Tratamento [sintomático] de' indication stem", () => {
+  assertEqual(stripIndicationStem("Alívio sintomático de dores de cabeça"), "Dores de cabeça", "alívio sintomático de");
+  assertEqual(stripIndicationStem("Tratamento sintomático da febre"), "Febre", "tratamento sintomático da");
+  assertEqual(stripIndicationStem("Alívio de dores"), "Dores", "alívio de");
+  assertEqual(stripIndicationStem("Estados gripais"), "Estados gripais", "no stem unchanged");
+});
+
+scenario("salvages the model's mangled stem ('sintático' typo)", () => {
+  assertEqual(
+    stripIndicationStem("Alívio sintático de dores musculares (contraturas)"),
+    "Dores musculares (contraturas)",
+    "mangled stem stripped",
+  );
+});
+
+scenario("indications: strips stems, dedupes, and caps at 6", () => {
+  const { indications } = sanitizeMedicineSummary({
+    category: "X",
+    indications: [
+      "Alívio sintomático de febre",
+      "Alívio sintomático de dores de cabeça",
+      "Alívio sintomático de dores de cabeça", // duplicate after strip
+      "Tratamento sintomático de estados gripais",
+      "Dores de dentes",
+      "Dores menstruais",
+      "Dores musculares",
+      "Reações à vacinação", // 7th distinct → dropped by the cap
+    ],
+    keyWarnings: [],
+  });
+  assertEqual(
+    indications,
+    ["Febre", "Dores de cabeça", "Estados gripais", "Dores de dentes", "Dores menstruais", "Dores musculares"],
+    "stem-stripped, deduped, capped at 6",
   );
 });
 

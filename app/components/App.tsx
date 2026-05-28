@@ -321,6 +321,7 @@ function AppContent() {
     setTotalPages(0);
     setSavedPdfBase64(null);
     setOverview("");
+    setDocId("");
     setMedicineSummary(null);
     setCompletedSteps([]);
     setCurrentStep("");

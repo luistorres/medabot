@@ -31,14 +31,38 @@ const ExtractionSchema = z.object({
 const NEGATIVE_WARNING_RE =
   /^(nenhum|sem (informa|aviso)|n[ãa]o (consta|constam|encontr|encontrad|se aplica|aplic|h[áa]|existe|foram|foi))/i;
 
+// Strip a redundant leading "Alívio/Tratamento [sintomático] de/da …" stem so the
+// "Para que serve" list reads as bare conditions instead of every line opening with
+// the same words. The section title already frames these as what the medicine treats,
+// so the stem is noise — and stripping it also salvages the model's occasional
+// mangled stem (e.g. the typo "Alívio sintático de"). Deterministic: never relies on
+// the model phrasing it well.
+const INDICATION_STEM_RE =
+  /^\s*(?:al[íi]vio|tratamento)\s+(?:sint(?:om)?[áa]tico\s+)?(?:de|da|das|do|dos)\s+/i;
+
+export function stripIndicationStem(s: string): string {
+  const cleaned = s.replace(INDICATION_STEM_RE, "").trim();
+  if (!cleaned) return s.trim();
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+}
+
 export function sanitizeMedicineSummary(
   summary: MedicineSummary,
 ): MedicineSummary {
+  // Strip the redundant stem, drop blanks/duplicates, cap to keep the list scannable.
+  const seen = new Set<string>();
+  const indications: string[] = [];
+  for (const raw of summary.indications) {
+    const ind = stripIndicationStem(raw.trim());
+    const key = ind.toLowerCase();
+    if (!ind || seen.has(key)) continue;
+    seen.add(key);
+    indications.push(ind);
+    if (indications.length === 6) break;
+  }
   return {
     category: summary.category.trim() || "Medicamento",
-    // Cap to keep "Para que serve" scannable — the prompt already asks for short,
-    // grouped, prefix-free phrases; this is a hard backstop against a long wall.
-    indications: summary.indications.map((s) => s.trim()).filter(Boolean).slice(0, 6),
+    indications,
     keyWarnings: summary.keyWarnings
       .map((s) => s.trim())
       .filter(Boolean)
@@ -107,7 +131,7 @@ export const extractMedicineSummary = createServerFn({
 
 Extrai:
 - category: categoria terapêutica em pt-PT, curta.
-- indications: lista CURTA de indicações (pt-PT), começando diretamente pela condição ou finalidade. NÃO repitas prefixos como «Tratamento sintomático de/da» — começa pela condição (ex.: «Febre», «Estados gripais», «Enxaquecas diagnosticadas»). Agrupa as semelhantes numa só linha quando fizer sentido (ex.: junta dores de cabeça/dentes/ouvidos/menstruais/musculares) e devolve no máximo 6, das mais representativas.
+- indications: lista CURTA (máximo 6) das condições/finalidades, em pt-PT. Cada item é APENAS o nome da condição, em poucas palavras (ex.: «Febre», «Dores de cabeça», «Dores musculares», «Estados gripais», «Enxaquecas diagnosticadas»). NUNCA comeces um item com «Alívio», «Tratamento», «Alívio sintomático de», «Tratamento sintomático de» nem com um verbo — escreve apenas a condição. Agrupa as semelhantes numa só linha quando fizer sentido.
 - keyWarnings: no máximo 2 avisos, cada um { text, anchor }. "text" é o aviso curto e factual em pt-PT, APENAS sobre (a) dose máxima diária recomendada, ou (b) interação importante (álcool ou outros medicamentos). NÃO incluas números de página no "text"; NÃO uses fórmulas como "consulte o médico" ou "salvo indicação médica" a menos que façam parte literal do aviso no folheto. "anchor" é um trecho VERBATIM curto copiado EXATAMENTE do folheto que comprova o aviso e TEM de incluir quaisquer números/doses do "text". Inclui um aviso só se constar do folheto; caso contrário devolve [].
 
 Não incluas números de página, marcadores de realce, nem texto fora do JSON.`,
