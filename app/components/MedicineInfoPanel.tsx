@@ -134,7 +134,7 @@ const MedicineInfoPanel = ({
 
         {/* Identity card */}
         <div className="px-6 pb-6">
-          <div className="bg-paper rounded-xl border border-border p-4 flex gap-4 items-start">
+          <div className="bg-paper rounded-xl border border-border p-4 flex gap-4 items-start lg:flex-col lg:gap-3">
             {/* Box silhouette — photo or CSS placeholder */}
             {image ? (
               <img
