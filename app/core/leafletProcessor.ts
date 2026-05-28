@@ -1,4 +1,6 @@
 import pdfParse from "pdf-parse";
+import { zodResponseFormat } from "openai/helpers/zod";
+import { z } from "zod";
 import { openai } from "./llm";
 
 export interface Chunk {
@@ -10,10 +12,80 @@ export interface ChunkWithEmbedding extends Chunk {
   embedding: number[];
 }
 
+const LeafletAnswerSchema = z.object({
+  answer: z.string(),
+  highlightPhrase: z.string().nullable(),
+});
+
 // The string pdf-parse uses to join consecutive page texts.
 // pdf-parse sets ret.text = `${ret.text}\n\n${pageText}` for each page,
 // so the full text is "\n\n" + page1 + "\n\n" + page2 + ...
 const PAGE_JOINER = "\n\n";
+
+function stripHighlightLeak(answer: string): string {
+  return answer
+    .split(/\n+/)
+    .filter((line) => {
+      const s = line.trim();
+      return !/^(?:a\s+)?(?:afirma[cç][aã]o|frase|express[aã]o|trecho)[-\s]?chave\s*(?:é|:)/i.test(s)
+        && !/^key claim\s*(?:is|:)/i.test(s);
+    })
+    .join("\n")
+    .replace(/==([^=\n]+)==/g, "$1")
+    .trim();
+}
+
+// Find a **bold** span that fully encloses [start, end), if any. Used to pull
+// the highlight out of bold so formatMessage renders the <mark> (==..== nested
+// inside **..** would otherwise be swallowed by the bold matcher and shown raw).
+function findEnclosingBold(
+  text: string,
+  start: number,
+  end: number,
+): { start: number; end: number; innerStart: number; innerEnd: number } | null {
+  const boldPattern = /\*\*([\s\S]+?)\*\*/g;
+  let m: RegExpExecArray | null;
+  while ((m = boldPattern.exec(text)) !== null) {
+    const innerStart = m.index + 2;
+    const innerEnd = m.index + m[0].length - 2;
+    if (start >= innerStart && end <= innerEnd) {
+      return { start: m.index, end: m.index + m[0].length, innerStart, innerEnd };
+    }
+  }
+  return null;
+}
+
+function applySingleHighlight(answer: string, phrase: string | null): string {
+  const clean = stripHighlightLeak(answer);
+  const p = phrase?.trim().replace(/==/g, "") ?? "";
+  if (!p || p.length > 90 || p.split(/\s+/).length > 14) return clean;
+  const first = clean.indexOf(p);
+  if (first === -1) return clean;
+  const second = clean.indexOf(p, first + p.length);
+  if (second !== -1) return clean; // ambiguous; prefer no highlight
+  const end = first + p.length;
+
+  const bold = findEnclosingBold(clean, first, end);
+  if (!bold) {
+    return clean.slice(0, first) + `==${p}==` + clean.slice(end);
+  }
+
+  // Phrase sits inside a **bold** span — rebuild as **pre** ==phrase== **post**,
+  // dropping empty bold remnants and preserving the original spacing.
+  const pre = clean.slice(bold.innerStart, first);
+  const post = clean.slice(end, bold.innerEnd);
+  const preBold = pre.replace(/\s+$/, "");
+  const preSpace = pre.slice(preBold.length);
+  const postBold = post.replace(/^\s+/, "");
+  const postSpace = post.slice(0, post.length - postBold.length);
+  const rebuilt =
+    (preBold ? `**${preBold}**` : "") +
+    preSpace +
+    `==${p}==` +
+    postSpace +
+    (postBold ? `**${postBold}**` : "");
+  return clean.slice(0, bold.start) + rebuilt + clean.slice(bold.end);
+}
 
 /**
  * Pure helper: chunk each page's text separately (paragraph-aware, 800/150),
@@ -209,9 +281,10 @@ export async function queryLeaflet(
         ? pageNumbers.join(", ")
         : "Páginas não identificadas";
 
-    // Direct chat completion — same pattern as identify.ts
-    const response = await openai.chat.completions.create({
-      model: "gpt-5.3-chat-latest",
+    const response = await openai.chat.completions.parse({
+      model: "gpt-5.4",
+      reasoning_effort: "low",
+      response_format: zodResponseFormat(LeafletAnswerSchema, "leaflet_answer"),
       max_completion_tokens: 4000,
       messages: [
         {
@@ -227,7 +300,9 @@ Instruções importantes:
 6. Sempre recomende consultar profissionais de saúde para aconselhamento médico personalizado
 7. Use uma linguagem clara e acessível
 8. Organize a resposta de forma estruturada quando apropriado
-9. Realce a afirmação-chave: envolva em ==...== a ÚNICA expressão curta que responde diretamente à pergunta do paciente (exemplo: "O paracetamol ==pode ser utilizado durante a gravidez==, mas com precaução."). Use no máximo um realce por resposta, mantenha-o curto (poucas palavras), e realce apenas quando existir uma afirmação-chave clara. Se a resposta for um resumo geral sem uma afirmação-chave única, não realce nada.`,
+9. Para realce visual, escolha opcionalmente uma única expressão curta que já apareça LITERALMENTE na resposta e que responda diretamente à pergunta do paciente, e devolva-a no campo highlightPhrase. Não escreva rótulos como "afirmação-chave" ou "frase-chave", nem explicações sobre o realce, e NÃO use marcação ==...== no texto da resposta. Se não houver uma afirmação-chave única e clara, ou se a resposta for um resumo geral, defina highlightPhrase como null.
+
+Contrato do campo highlightPhrase: deve ser copiado VERBATIM do texto da resposta, ou null; nunca invente; use null para resumos gerais/visões gerais.`,
         },
         {
           role: "user",
@@ -241,7 +316,10 @@ Questão do paciente: ${question}`,
       ],
     });
 
-    const answer = response.choices[0]?.message?.content || "Sem resposta.";
+    const parsed = response.choices[0]?.message?.parsed;
+    const answer = parsed
+      ? applySingleHighlight(parsed.answer, parsed.highlightPhrase)
+      : "Sem resposta.";
 
     return {
       answer,
