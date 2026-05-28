@@ -8,6 +8,7 @@ interface ResponsiveContainerProps {
   chat: ReactNode;
   showPdfViewer?: boolean;
   onReset?: () => void;
+  medicineName?: string;
 }
 
 const ResponsiveContainer = ({
@@ -15,6 +16,7 @@ const ResponsiveContainer = ({
   chat,
   showPdfViewer = true,
   onReset,
+  medicineName,
 }: ResponsiveContainerProps) => {
   const isDesktop = useMediaQuery("(min-width: 64rem)");
 
@@ -25,6 +27,7 @@ const ResponsiveContainer = ({
         chat={chat}
         showPdfViewer={showPdfViewer}
         onReset={onReset}
+        medicineName={medicineName}
       />
     );
   }

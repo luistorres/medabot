@@ -446,6 +446,7 @@ function AppContent() {
   return (
     <ResponsiveContainer
       onReset={handleReset}
+      medicineName={medicineInfo.name}
       medicineInfoPanel={
         <MedicineInfoPanel
           medicineInfo={medicineInfo}

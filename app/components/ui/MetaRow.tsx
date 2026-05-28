@@ -21,7 +21,7 @@ export function MetaRow({ items }: MetaRowProps) {
             {it.label}
           </span>
           <span
-            className={`${it.serif ? "font-serif text-[17px]" : "text-[14px]"} text-ink`}
+            className={`${it.serif ? "font-serif text-[17px]" : "text-[14px]"} text-ink min-w-0 break-words`}
           >
             {it.value}
           </span>

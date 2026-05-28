@@ -1,5 +1,6 @@
 import { IdentifyMedicineResponse } from "../core/identify";
 import { usePDF } from "../context/PDFContext";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import type { MedicineSummary } from "../server/extractMedicineSummary";
 import Button from "./ui/Button";
 import { Wordmark } from "./ui/Wordmark";
@@ -27,6 +28,10 @@ const MedicineInfoPanel = ({
   onForceRefresh,
 }: MedicineInfoPanelProps) => {
   const { setIsPdfViewerOpen, setActiveTab } = usePDF();
+  // On desktop the global top bar owns the wordmark + source badge + reset, so
+  // this panel's own header is redundant there (it's only needed on mobile,
+  // where each screen is full-screen).
+  const isDesktop = useMediaQuery("(min-width: 64rem)");
 
   const handleViewPdf = () => {
     setIsPdfViewerOpen(true);
@@ -54,18 +59,20 @@ const MedicineInfoPanel = ({
 
   return (
     <div className="bg-bg h-full flex flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-rule flex-shrink-0">
-        <button
-          onClick={onReset}
-          className="inline-flex items-center justify-center w-9 h-9 rounded-lg text-ink-2 hover:bg-tint transition-colors"
-          aria-label="Voltar"
-        >
-          <Icon.back className="w-5 h-5" />
-        </button>
-        <Wordmark size={16} />
-        <SourceBadge medicine={medicineInfo.name} />
-      </div>
+      {/* Header — mobile only (desktop top bar provides this chrome) */}
+      {!isDesktop && (
+        <div className="flex items-center justify-between px-4 py-3 border-b border-rule flex-shrink-0">
+          <button
+            onClick={onReset}
+            className="inline-flex items-center justify-center w-9 h-9 rounded-lg text-ink-2 hover:bg-tint transition-colors"
+            aria-label="Voltar"
+          >
+            <Icon.back className="w-5 h-5" />
+          </button>
+          <Wordmark size={16} />
+          <SourceBadge medicine={medicineInfo.name} />
+        </div>
+      )}
 
       {/* Scrollable content */}
       <div className="flex-1 min-h-0 overflow-y-auto">
@@ -90,7 +97,7 @@ const MedicineInfoPanel = ({
 
         {/* Identity card */}
         <div className="px-6 pb-6">
-          <div className="bg-paper rounded-xl border border-border p-4 flex gap-4 items-start">
+          <div className="bg-paper rounded-xl border border-border p-4 flex gap-4 items-start lg:flex-col lg:gap-3">
             {/* Box silhouette — photo or CSS placeholder */}
             {image ? (
               <img
