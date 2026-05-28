@@ -1,4 +1,3 @@
-import pdfParse from "pdf-parse";
 import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
@@ -7,21 +6,11 @@ import { highlightKeyClaim } from "./highlight";
 import { resolveSourceQuote } from "./sourceQuote";
 import {
   LeafletDoc,
-  extractPageTexts,
   assembleLeafletContext,
   validateCitedPages,
   pageParagraphs,
 } from "./leafletStore";
 import { stripInlinePageRefs } from "../utils/stripInlinePageRefs";
-
-export interface Chunk {
-  text: string;
-  page: number;
-}
-
-export interface ChunkWithEmbedding extends Chunk {
-  embedding: number[];
-}
 
 export interface ChatTurn {
   role: "user" | "assistant";
@@ -70,122 +59,6 @@ Campos estruturados a devolver:
 - citedPages: lista dos números de página que efetivamente usaste para responder (apenas esses). [] se a resposta não estiver no folheto.
 - highlightPhrase: opcionalmente UMA expressão curta que apareça LITERALMENTE na resposta e responda diretamente à pergunta; caso contrário null. Sem rótulos e sem marcação ==...==.
 - quoteStart / quoteEnd: para localizar no folheto o trecho que fundamenta a resposta, escolhe UM trecho CURTO (idealmente uma única frase, menos de ~40 palavras) e devolve as primeiras ~5-6 palavras (quoteStart) e as últimas ~5-6 palavras (quoteEnd) desse MESMO trecho contíguo, copiadas VERBATIM do folheto (não da tua resposta). Não incluas "[Página X]". Usa null em ambos se nenhum trecho curto e único fundamentar a resposta.`;
-
-// The string pdf-parse uses to join consecutive page texts.
-// pdf-parse sets ret.text = `${ret.text}\n\n${pageText}` for each page,
-// so the full text is "\n\n" + page1 + "\n\n" + page2 + ...
-const PAGE_JOINER = "\n\n";
-
-/**
- * Pure helper: chunk each page's text separately (paragraph-aware, 800/150),
- * assigning the 1-based page number to every chunk it produces.
- *
- * This is the canonical runtime chunking function. The test in
- * scripts/test-page-mapping.ts exercises this exact export.
- *
- * @param pageTexts  Array of per-page text strings (index 0 = page 1).
- * @returns          Flat array of chunks in page order, each with the correct page number.
- */
-export function chunkPagesWithNumbers(pageTexts: string[]): Chunk[] {
-  const result: Chunk[] = [];
-  for (let i = 0; i < pageTexts.length; i++) {
-    const pageNum = i + 1; // 1-based
-    const pageChunks = splitIntoChunks(pageTexts[i]);
-    for (const text of pageChunks) {
-      result.push({ text, page: pageNum });
-    }
-  }
-  return result;
-}
-
-// Split text into overlapping chunks, preferring paragraph boundaries.
-// Returns only the chunk text strings (page assignment is handled by the caller).
-function splitIntoChunks(text: string, chunkSize = 800, overlap = 150): string[] {
-  const chunks: string[] = [];
-  let start = 0;
-  while (start < text.length) {
-    let end = start + chunkSize;
-    // Try to break at a paragraph or sentence boundary
-    if (end < text.length) {
-      const slice = text.slice(start, end);
-      const lastParagraph = slice.lastIndexOf("\n\n");
-      const lastNewline = slice.lastIndexOf("\n");
-      const lastSentence = slice.lastIndexOf(". ");
-      if (lastParagraph > chunkSize * 0.5) end = start + lastParagraph;
-      else if (lastNewline > chunkSize * 0.5) end = start + lastNewline;
-      else if (lastSentence > chunkSize * 0.5) end = start + lastSentence + 1;
-    }
-    const chunkText = text.slice(start, end).trim();
-    if (chunkText.length > 0) {
-      chunks.push(chunkText);
-    }
-    start = end - overlap;
-  }
-  return chunks;
-}
-
-function cosineSimilarity(a: number[], b: number[]): number {
-  let dot = 0,
-    normA = 0,
-    normB = 0;
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
-  }
-  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
-}
-
-async function embedTexts(texts: string[]): Promise<number[][]> {
-  const resp = await openai.embeddings.create({
-    model: "text-embedding-3-small",
-    input: texts,
-  });
-  return resp.data.map((d) => d.embedding);
-}
-
-export async function retrieveRelevantChunks(
-  chunks: ChunkWithEmbedding[],
-  question: string,
-  k = 6,
-): Promise<ChunkWithEmbedding[]> {
-  const [questionEmbedding] = await embedTexts([question]);
-
-  return chunks
-    .map((chunk) => ({
-      chunk,
-      score: cosineSimilarity(questionEmbedding, chunk.embedding),
-    }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, k)
-    .map((s) => s.chunk);
-}
-
-// Process PDF: extract text, chunk per-page, embed
-export async function processLeaflet(pdfBase64: string) {
-  try {
-    const pages = await extractPageTexts(pdfBase64);
-    const chunks: Chunk[] = chunkPagesWithNumbers(pages.map((p) => p.text));
-
-    // Embed all chunks in one batch
-    const embeddings = await embedTexts(chunks.map((c) => c.text));
-
-    const chunksWithEmbeddings: ChunkWithEmbedding[] = chunks.map(
-      (chunk, i) => ({
-        ...chunk,
-        embedding: embeddings[i],
-      }),
-    );
-
-    return {
-      chunks: chunksWithEmbeddings,
-      documentCount: chunksWithEmbeddings.length,
-    };
-  } catch (error) {
-    console.error("Error processing leaflet:", error);
-    throw error;
-  }
-}
 
 /**
  * Whole-leaflet, multi-turn chat. The full page-tagged leaflet sits in a stable
