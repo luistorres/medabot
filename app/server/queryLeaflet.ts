@@ -52,6 +52,7 @@ export const queryLeafletPdf = createServerFn({
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
         answer: "Desculpe, encontrei um erro ao processar a sua questão. Por favor, tente novamente.",
+        sources: [],
         pageNumbers: [],
         relevantPages: [],
       };

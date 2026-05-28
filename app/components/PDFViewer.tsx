@@ -61,10 +61,15 @@ const PDFViewer = ({ onClose, width = 40, isTabMode = false }: PDFViewerProps) =
   // used to map cited passages to the text-layer item indices we wash amber.
   const [pageTextItems, setPageTextItems] = useState<{ str: string }[]>([]);
 
-  const highlightItemSet = useMemo(
-    () => computeHighlightItemIndices(pageTextItems, highlightTexts),
-    [pageTextItems, highlightTexts]
-  );
+  // Only wash passages on the page we actually jumped to — if the user then
+  // navigates elsewhere, the cited passages no longer apply (avoids a
+  // coincidental anchor match washing the wrong text on another page).
+  const highlightItemSet = useMemo(() => {
+    if (lastJumpedPage === null || currentPage !== lastJumpedPage) {
+      return new Set<number>();
+    }
+    return computeHighlightItemIndices(pageTextItems, highlightTexts);
+  }, [pageTextItems, highlightTexts, currentPage, lastJumpedPage]);
 
   const customTextRenderer = useCallback(
     ({ str, itemIndex }: { str: string; itemIndex: number }) =>

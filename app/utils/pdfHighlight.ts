@@ -58,14 +58,13 @@ export function computeHighlightItemIndices(
 
   for (const target of targets) {
     const targetWords = normalizeForMatch(target).split(" ").filter(Boolean);
-    if (targetWords.length === 0) continue;
+    // Skip trivially short passages — a 1-2 word anchor matches too easily.
+    if (targetWords.length < 3) continue;
 
-    // Anchor on the first few words (full target if it's short). A longer
-    // anchor avoids false matches on common words.
-    const anchorLen = Math.min(
-      targetWords.length,
-      Math.max(4, Math.min(8, targetWords.length))
-    );
+    // Anchor on the first few words (full target if short, else 4-8 words).
+    // A longer anchor avoids false matches on common words.
+    const anchorLen =
+      targetWords.length < 4 ? targetWords.length : Math.min(8, targetWords.length);
     const anchor = targetWords.slice(0, anchorLen);
 
     let anchorAt = -1;
