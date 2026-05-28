@@ -128,4 +128,16 @@
     background: var(--color-brand);
     display: inline-block;
   }
+
+  /* Cited-passage highlight inside the PDF.js text layer. The text-layer text
+     is transparent (pdf.js positions it over the canvas glyphs for selection),
+     so the mark must keep its text transparent and only paint a translucent
+     amber wash — the underlying rendered glyphs stay readable. */
+  .react-pdf__Page__textContent mark.mb-pdf-hl {
+    background: rgba(176, 122, 31, 0.30);
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    border-radius: 2px;
+    padding: 0;
+  }
 }

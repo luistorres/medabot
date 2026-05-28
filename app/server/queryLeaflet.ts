@@ -37,6 +37,12 @@ export const queryLeafletPdf = createServerFn({
         success: true,
         answer: result.answer,
         sourceCount: result.sourceDocuments.length,
+        // Forward the grounded source passages (text + page) so the client can
+        // wash the cited passage in the PDF when a citation is clicked.
+        sources: result.sourceDocuments.map((c) => ({
+          page: c.page,
+          text: c.text,
+        })),
         pageNumbers: result.pageNumbers || [],
         relevantPages: result.relevantPages || [],
       };
@@ -46,6 +52,7 @@ export const queryLeafletPdf = createServerFn({
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
         answer: "Desculpe, encontrei um erro ao processar a sua questão. Por favor, tente novamente.",
+        sources: [],
         pageNumbers: [],
         relevantPages: [],
       };

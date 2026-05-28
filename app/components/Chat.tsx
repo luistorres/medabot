@@ -20,6 +20,8 @@ interface ChatMessage {
   content: string;
   timestamp: Date;
   sourcePages?: number[];
+  /** Source chunks (text + page) the answer was grounded on — for PDF passage highlighting. */
+  sources?: { page: number; text: string }[];
   isOverview?: boolean;
   /** Original question that triggered this error — for retry */
   retryQuestion?: string;
@@ -185,6 +187,7 @@ const Chat = ({
           content: result.answer,
           timestamp: new Date(),
           sourcePages: result.pageNumbers,
+          sources: result.sources,
         };
         setMessages((prev) => [...prev, assistantMessage]);
         // Refresh suggestions based on the latest answer.
@@ -384,6 +387,7 @@ const Chat = ({
                 <CitationRow
                   pages={message.sourcePages ?? []}
                   onJump={jumpToPage}
+                  sources={message.sources}
                 />
               </div>
             );
