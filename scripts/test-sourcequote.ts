@@ -3,8 +3,9 @@
  * Unit tests for sourceQuote anchor resolution. Pure functions — no PDF, model,
  * or network required.
  *
- * The model returns a short ANCHOR (first words of the grounding sentence);
- * resolveSourceQuote expands it to the full sentence from the retrieved chunk.
+ * The model returns two short anchors (quoteStart = first words, quoteEnd = last
+ * words of the grounding span); resolveSourceQuote slices the raw span between
+ * them from the retrieved chunk.
  *
  * Usage:
  *   npx tsx scripts/test-sourcequote.ts
@@ -41,46 +42,54 @@ function scenario(name: string, fn: () => void) {
 
 console.log("\n=== sourceQuote Unit Tests ===\n");
 
-scenario("expands a short anchor to its full sentence", () => {
+scenario("slices the raw span between start and end anchors", () => {
   const chunks = [
     {
       page: 3,
-      text: "Este medicamento deve ser tomado com água. Outra informação irrelevante.",
+      text: "Este medicamento deve ser tomado com água após a refeição e nada mais.",
     },
   ];
   assertEqual(
-    resolveSourceQuote("Este medicamento deve ser", chunks),
-    { quote: "Este medicamento deve ser tomado com água.", page: 3 },
-    "anchor → sentence",
+    resolveSourceQuote("Este medicamento deve", "água após a refeição", chunks),
+    {
+      quote: "Este medicamento deve ser tomado com água após a refeição",
+      page: 3,
+    },
+    "span between anchors",
   );
 });
 
-scenario("matches anchor with accent and case differences", () => {
+scenario("matches anchors with accent and case differences", () => {
   const chunks = [
     {
       page: 1,
-      text: "A administração é recomendada após as refeições principais.",
+      text: "A administração é recomendada após as refeições principais do dia.",
     },
   ];
   assertEqual(
-    resolveSourceQuote("ADMINISTRACAO E RECOMENDADA", chunks),
+    resolveSourceQuote(
+      "ADMINISTRACAO E RECOMENDADA",
+      "AS REFEICOES PRINCIPAIS",
+      chunks,
+    ),
     {
-      quote: "A administração é recomendada após as refeições principais.",
+      quote: "administração é recomendada após as refeições principais",
       page: 1,
     },
     "accent/case-insensitive",
   );
 });
 
-scenario("cleans page prefix and highlight markers from the anchor", () => {
+scenario("cleans page prefix and markers from the anchors", () => {
   const chunks = [
-    {
-      page: 2,
-      text: "Não tome este medicamento se tem alergia ao paracetamol.",
-    },
+    { page: 2, text: "Não tome este medicamento se tem alergia ao paracetamol." },
   ];
   assertEqual(
-    resolveSourceQuote(" ==[Página 2] Não tome este medicamento== ", chunks),
+    resolveSourceQuote(
+      " ==[Página 2] Não tome este== ",
+      "alergia ao paracetamol",
+      chunks,
+    ),
     {
       quote: "Não tome este medicamento se tem alergia ao paracetamol.",
       page: 2,
@@ -89,29 +98,48 @@ scenario("cleans page prefix and highlight markers from the anchor", () => {
   );
 });
 
-scenario("rejects an anchor with fewer than three words", () => {
+scenario("rejects when an anchor has fewer than three words", () => {
+  const chunks = [{ page: 1, text: "Este aviso é muito importante para todos." }];
   assertEqual(
-    resolveSourceQuote("muito importante", [
-      { page: 1, text: "Este aviso é muito importante para todos." },
-    ]),
+    resolveSourceQuote("muito importante", "para todos hoje", chunks),
     null,
-    "too few words",
+    "start too short",
   );
 });
 
-scenario("rejects an anchor not present in any chunk", () => {
+scenario("rejects when the start anchor is not present", () => {
   assertEqual(
-    resolveSourceQuote("isto nao aparece aqui", [
-      { page: 1, text: "O folheto fala apenas de dosagem e conservação." },
+    resolveSourceQuote("isto nao aparece", "ao alcance das", [
+      { page: 1, text: "Conservar ao alcance das crianças sempre." },
     ]),
     null,
-    "not present",
+    "start not present",
   );
 });
 
-scenario("rejects null input", () => {
+scenario("rejects when the end anchor is not present after the start", () => {
   assertEqual(
-    resolveSourceQuote(null, [
+    resolveSourceQuote("Conservar ao alcance", "texto inexistente aqui", [
+      { page: 1, text: "Conservar ao alcance das crianças sempre." },
+    ]),
+    null,
+    "end not present",
+  );
+});
+
+scenario("rejects when the end anchor precedes the start anchor", () => {
+  assertEqual(
+    resolveSourceQuote("Introducao inicial agora", "Conclusao final aqui", [
+      { page: 1, text: "Conclusao final aqui. Introducao inicial agora mesmo." },
+    ]),
+    null,
+    "end before start",
+  );
+});
+
+scenario("rejects null inputs", () => {
+  assertEqual(
+    resolveSourceQuote(null, null, [
       { page: 1, text: "Uma frase suficientemente longa para validar." },
     ]),
     null,
@@ -119,10 +147,10 @@ scenario("rejects null input", () => {
   );
 });
 
-scenario("rejects an anchor that resolves on different pages", () => {
+scenario("rejects anchors that resolve on different pages", () => {
   const text = "Conservar fora da vista e do alcance das crianças.";
   assertEqual(
-    resolveSourceQuote("Conservar fora da vista", [
+    resolveSourceQuote("Conservar fora da", "alcance das crianças", [
       { page: 1, text },
       { page: 4, text },
     ]),
@@ -131,48 +159,35 @@ scenario("rejects an anchor that resolves on different pages", () => {
   );
 });
 
-scenario("rejects an anchor that hits different sentences on the same page", () => {
+scenario("accepts a same-page span present in two overlapping chunks", () => {
+  // Realistic overlap: the grounding span sits in the 150-char overlap and so
+  // appears (identically) in both adjacent same-page chunks.
+  const span = "Tomar um comprimido por dia durante cinco dias";
   assertEqual(
-    resolveSourceQuote("Tome o comprimido", [
-      {
-        page: 2,
-        text: "Tome o comprimido de manhã. Tome o comprimido à noite também.",
-      },
+    resolveSourceQuote("Tomar um comprimido", "durante cinco dias", [
+      { page: 7, text: `Indicações gerais. ${span} e nada mais.` },
+      { page: 7, text: `Algo antes. ${span} e depois parar.` },
     ]),
-    null,
-    "ambiguous sentences",
-  );
-});
-
-scenario("accepts a same-page anchor present in two overlapping chunks", () => {
-  // Realistic overlap: chunks overlap by 150 chars, so the grounding sentence
-  // appears whole in both adjacent same-page chunks (with different surrounding
-  // sentences). The matched sentence is identical, so accept.
-  const sentence = "Tomar um comprimido por dia durante cinco dias.";
-  assertEqual(
-    resolveSourceQuote("Tomar um comprimido por dia", [
-      { page: 7, text: `Indicações gerais sobre o uso. ${sentence} Mais texto.` },
-      { page: 7, text: `${sentence} Suspender depois do tratamento.` },
-    ]),
-    { quote: sentence, page: 7 },
+    { quote: span, page: 7 },
     "same-page overlap accepted",
   );
 });
 
-scenario("rejects when the resolved sentence exceeds 400 characters", () => {
-  const longSentence = `${"palavra ".repeat(60)}fim`; // ~487 chars, no boundary
+scenario("rejects when the resolved span exceeds 400 characters", () => {
+  const filler = "palavra ".repeat(60); // ~480 chars between anchors
+  const text = `comeco do trecho ${filler} fim do trecho aqui`;
   assertEqual(
-    resolveSourceQuote("palavra palavra palavra", [
-      { page: 1, text: longSentence },
-    ]),
+    resolveSourceQuote("comeco do trecho", "fim do trecho", [{ page: 1, text }]),
     null,
     "resolved too long",
   );
 });
 
-scenario("rejects when the resolved sentence is under 20 characters", () => {
+scenario("rejects when the resolved span is under 20 characters", () => {
   assertEqual(
-    resolveSourceQuote("Tome a água", [{ page: 1, text: "Tome a água." }]),
+    resolveSourceQuote("abc def ghi", "def ghi jkl", [
+      { page: 1, text: "abc def ghi jkl." },
+    ]),
     null,
     "resolved too short",
   );
