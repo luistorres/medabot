@@ -75,10 +75,10 @@ export function formatMessage(text: string): ReactNode[] {
   return result;
 }
 
-/** Inline formatting: **bold** and *italic* */
+/** Inline formatting: **bold**, ==highlight== (key claim), and *italic* */
 function formatInline(text: string): ReactNode {
-  // Match **bold** and *italic*
-  const pattern = /(\*\*(.+?)\*\*|\*(.+?)\*)/g;
+  // Match **bold**, ==highlight==, and *italic*
+  const pattern = /(\*\*(.+?)\*\*|==(.+?)==|\*(.+?)\*)/g;
   const parts: ReactNode[] = [];
   let lastIndex = 0;
   let match;
@@ -92,8 +92,18 @@ function formatInline(text: string): ReactNode {
       // **bold**
       parts.push(<strong key={`b-${i++}`}>{match[2]}</strong>);
     } else if (match[3]) {
+      // ==highlight== — the key claim that answers the question (§7.5)
+      parts.push(
+        <mark
+          key={`h-${i++}`}
+          className="bg-accent-soft text-accent-ink px-1 rounded-sm"
+        >
+          {match[3]}
+        </mark>
+      );
+    } else if (match[4]) {
       // *italic*
-      parts.push(<em key={`i-${i++}`}>{match[3]}</em>);
+      parts.push(<em key={`i-${i++}`}>{match[4]}</em>);
     }
     lastIndex = match.index + match[0].length;
   }
