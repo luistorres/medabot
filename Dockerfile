@@ -4,6 +4,10 @@
 # the playwright package expects. This image runs Node 24 (ARG NODE_VERSION=24).
 FROM mcr.microsoft.com/playwright:v1.60.0-noble
 
+# Browsers are pre-installed here by the base image. Make the lookup path explicit
+# so chromium.launch() still resolves it if the base image ever changes.
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
 WORKDIR /app
 
 # Copy package files and scripts folder (needed for postinstall: copy-pdf-worker)

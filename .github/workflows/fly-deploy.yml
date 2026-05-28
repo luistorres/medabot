@@ -15,7 +15,7 @@ jobs:
       - uses: superfly/flyctl-actions/setup-flyctl@master
       - name: Assert Dockerfile Playwright tag matches locked version
         run: |
-          IMG_VER=$(grep -oP 'mcr\.microsoft\.com/playwright:v\K[0-9]+\.[0-9]+\.[0-9]+' Dockerfile)
+          IMG_VER=$(grep -oP '^FROM mcr\.microsoft\.com/playwright:v\K[0-9]+\.[0-9]+\.[0-9]+' Dockerfile)
           PKG_VER=$(node -p "require('./package-lock.json').packages['node_modules/playwright'].version")
           echo "Dockerfile image: $IMG_VER | locked playwright: $PKG_VER"
           if [ "$IMG_VER" != "$PKG_VER" ]; then
