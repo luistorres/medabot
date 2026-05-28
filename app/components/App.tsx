@@ -158,7 +158,9 @@ function AppContent() {
       queryLeafletPdf({
         data: {
           pdfBase64: pdfBase64,
-          question: "What is this medicine used for? Provide a brief overview.",
+          question: "Para que serve este medicamento? Dá um resumo breve.",
+          medicineName: medicineInfo.name,
+          history: [],
         },
       }),
       extractMedicineSummary({ data: pdfBase64 }),

@@ -5,7 +5,6 @@ import { usePDF } from "../context/PDFContext";
 import { useScrollToBottom } from "../hooks/useScrollToBottom";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useRotatingPlaceholder } from "../hooks/useRotatingPlaceholder";
-import { parseMessageWithReferences } from "../utils/parseReferences";
 import { formatMessage } from "../utils/formatMessage";
 import { isNotFoundAnswer } from "../utils/isNotFoundAnswer";
 import Button from "./ui/Button";
@@ -172,10 +171,22 @@ const Chat = ({
     setLoading(true);
 
     try {
+      const history = messages
+        .filter((m) => m.type === "user" || m.type === "assistant")
+        .map((m) => ({
+          role: m.type === "user" ? ("user" as const) : ("assistant" as const),
+          content: m.content.replace(/==/g, ""),
+        }));
+      // On retry, the failed question is still the trailing user turn (its error bubble
+      // was filtered out). Drop it so it isn't duplicated with the `question` arg below.
+      if (history.length > 0 && history[history.length - 1].role === "user") history.pop();
+
       const result = await queryLeafletPdf({
         data: {
           pdfBase64: pdfData,
           question: text,
+          medicineName,
+          history,
         },
       });
 
@@ -246,18 +257,9 @@ const Chat = ({
     const formatted = formatMessage(content);
     return (
       <div className="font-serif text-[15px] leading-[1.6] text-ink space-y-1">
-        {formatted.map((node, i) => {
-          if (typeof node === "string") {
-            return (
-              <span key={i}>
-                {parseMessageWithReferences(node, {
-                  onPageClick: jumpToPage,
-                })}
-              </span>
-            );
-          }
-          return node;
-        })}
+        {formatted.map((node, i) =>
+          typeof node === "string" ? <span key={i}>{node}</span> : node,
+        )}
       </div>
     );
   };
@@ -512,6 +514,9 @@ const Chat = ({
               <Icon.send className="w-[18px] h-[18px]" />
             </button>
           </div>
+          <p className="mt-2 text-[11px] leading-snug text-muted text-center">
+            O Medabot explica o folheto. Não substitui o seu médico ou farmacêutico.
+          </p>
         </div>
       </div>
     </div>
