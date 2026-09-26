@@ -21,7 +21,7 @@ export const identifyMedicine = async (
   const base64Image = image.split(",")[1];
 
   const completion = await openai.chat.completions.parse({
-    model: "gpt-5.4-mini",
+    model: "gpt-6-luna",
     reasoning_effort: "low",
     response_format: zodResponseFormat(IdentifyMedicineSchema, "medicine"),
     messages: [

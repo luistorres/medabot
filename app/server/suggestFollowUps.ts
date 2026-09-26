@@ -21,8 +21,8 @@ export const suggestFollowUps = createServerFn({
           .trim()
           .slice(0, 80) || "este medicamento";
       const response = await openai.chat.completions.create({
-        model: "gpt-5.4-mini",
-        reasoning_effort: "minimal",
+        model: "gpt-6-luna",
+        reasoning_effort: "low",
         max_completion_tokens: 1000,
         messages: [
           {
