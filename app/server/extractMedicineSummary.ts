@@ -119,7 +119,7 @@ export const extractMedicineSummary = createServerFn({
       const contextWithPages = assembleLeafletContext(doc.pages);
 
       const response = await openai.chat.completions.parse({
-        model: "gpt-5.4",
+        model: "gpt-6-sol",
         reasoning_effort: "low",
         response_format: zodResponseFormat(ExtractionSchema, "medicine_summary"),
         max_completion_tokens: 2000,
